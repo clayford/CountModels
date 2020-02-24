@@ -1,5 +1,0 @@
-"0","homes <- read_csv(""albemarle_homes_2020.csv"")
-"
-"2","Error in read_csv(""albemarle_homes_2020.csv"") : 
-  could not find function ""read_csv""
-"
