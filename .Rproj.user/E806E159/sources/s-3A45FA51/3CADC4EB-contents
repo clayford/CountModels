@@ -1,0 +1,134 @@
+scores <- 1:4
+n <- 4
+y <- scores - mean(scores)
+X <- outer(y, seq_len(n) - 1, "^")
+QR <- qr(X)
+z <- QR$qr
+z <- z * (row(z) == col(z))
+raw <- qr.qy(QR, z)
+Z <- sweep(raw, 2L, apply(raw, 2L, function(x) sqrt(sum(x^2))), 
+           "/", check.margin = FALSE)
+colnames(Z) <- paste0("^", 1L:n - 1L)
+Z
+}
+
+dn <- colnames(Z)
+dn[2:min(4, n)] <- c(".L", ".Q", ".C")[1:min(3,n - 1)]
+colnames(Z) <- dn
+Z[, -1, drop = FALSE]
+
+contr.poly(4, contrasts = F)
+
+
+trt <- sample(0:1, size = 10000, replace = T)
+d <- rpois(n = 10000, lambda = exp(3 + 2*trt))
+log(c(mean(d[trt==0]), var(d[trt==0])))
+log(c(mean(d[trt==1]), var(d[trt==1]))
+
+m <- glm(d ~ trt, family = poisson)
+summary(m)$coefficients
+exp(coef(m))
+exp(m$coefficients)
+
+
+trt <- sample(0:1, size = 10000, replace = T)
+d <- rnbinom(n = 10000, mu = exp(3 + 2*trt), 
+             size = 1.2)
+log(c(mean(d[trt==0]), var(d[trt==0])))
+log(c(mean(d[trt==1]), var(d[trt==1])))
+
+library(MASS)
+m <- glm.nb(d ~ trt)
+coef(m)
+m$theta
+
+
+
+# Example 9.7.2 CDA, page 386
+dat <- data.frame(deaths = c(4,7,1,9),
+                  age = c("<55", "55+", "<55", "55+"),
+                  valve = c("a", "a", "m", "m"),
+                  time = c(1259, 1417, 2082, 1647))
+dat$rate <- dat$deaths/dat$time
+dat
+
+mod <- glm(deaths ~ age + valve + offset(log(time)), 
+           data = dat, family = poisson)
+summary(mod)
+
+# estimated rate for older age group is exp(1.221) = 3.4 times that for the
+# younger age group.
+
+fitted(mod) # predicted mean count
+predict(mod, type = "response") # or this
+
+# to get predicted mean rate
+predict(mod, type = "response")/dat$time
+
+
+# CDA with R
+
+
+
+
+
+
+# preidcted count
+trt <- sample(0:1, size = 20, replace = T)
+d1 <- rpois(n = 20, lambda = exp(0.6 + 1.2*trt))
+m <- glm(d1 ~ trt, family = poisson)
+summary(m)
+fitted(m)  # expected mean, or expected mean count
+log(fitted(m)) # expected mean on log scale
+predict(m)
+predict(m, type = "link") # expected value on log scale
+predict(m, type = "response")  # expected mean, or expected count
+dpois(x = 0:9, lambda = predict(m))
+
+mu <- predict(m, type = "response")
+p <- matrix(NA, length(mu), length(0:9))
+for (i in 0:9) p[, i + 1L] <- dpois(i, lambda = mu)
+expctd <- colSums(p)
+expctd
+
+
+# rootogram by hand
+# expected counts
+mu <- predict(phd.pois, type = "response")
+# empty matrix
+p <- matrix(NA, nrow = length(mu), ncol = length(0:9))
+for (i in 0:9) p[, i + 1L] <- dpois(i, lambda = mu)
+expctd <- sqrt(colSums(p))
+expctd
+
+obs <- sqrt(as.vector(table(PhdPubs$articles)[1:10]))
+
+d <- data.frame(count = 0:9,
+                obs,
+                expctd,
+                diff = expctd - obs)
+ggplot(d) +
+  geom_segment(aes(x = count, y = diff, 
+                   xend = count, yend = expctd),
+               size = 6, alpha = 1/4) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_point(aes(x = count, y = expctd), col = "red") +
+  geom_line(aes(x = count, y = expctd), col = "red")
+
+
+
+
+t_pred[1:10]
+t_pred <- table(simulate(phd.pois))
+t_pred[1:10]
+plot(t_pred[1:10])
+# top of bar: observed
+# bottom of bar: pred - obs
+
+pred_out <- predict(phd.pois, type = "response")
+str(pred_out)
+
+obs <- sqrt(as.vector(t_obs[1:10]))
+pred <- sqrt(as.vector(t_pred[1:10]))
+
+rootogram(phd.pois)

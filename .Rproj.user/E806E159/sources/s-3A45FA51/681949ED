@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1578433387262.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "681949ED",
+    "lastKnownWriteTime" : 140694662888188,
+    "last_content_update" : 1578433387262,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "90F73104",
+        "caption" : "dat_rate",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=dat_rate&cache_key=90F73104",
+        "displayedObservations" : 10000,
+        "environment" : "",
+        "expression" : "dat_rate",
+        "object" : "dat_rate",
+        "preview" : 0,
+        "totalObservations" : 10000,
+        "variables" : 3
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 8,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

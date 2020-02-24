@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1579099173717.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "DDEA9645",
+    "lastKnownWriteTime" : 1579099822,
+    "last_content_update" : 1579099822399,
+    "path" : "C:/Users/jcf2d/Box Sync/__Workshops/DataWranglingInR/DWR.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "25,8",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 10,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

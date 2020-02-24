@@ -1,0 +1,27 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1576784305683.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "44C583C7",
+    "lastKnownWriteTime" : 1579027911,
+    "last_content_update" : 1579027911081,
+    "path" : "C:/Users/jcf2d/Box Sync/__Workshops/CountModels/count_models_in_r.Rmd",
+    "project_path" : "count_models_in_r.Rmd",
+    "properties" : {
+        "cursorPosition" : "27,91",
+        "last_setup_crc32" : "",
+        "scrollLine" : "0",
+        "tempName" : "Untitled2"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

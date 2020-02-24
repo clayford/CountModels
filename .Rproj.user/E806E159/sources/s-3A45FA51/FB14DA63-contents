@@ -1,0 +1,447 @@
+---
+title: "Data Wrangling in R"
+author: "Clay Ford"
+date: "Spring 2020"
+output: 
+    beamer_presentation: 
+        fig_caption: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Agenda
+
+Cover the following topics with examples and exercises using `tidyverse` packages:
+
+- Understanding lists
+- Working with dates
+- Working with character data
+- Binding data frames
+- Merging or Joining data frames
+- Reshaping data frames
+
+## Data structures in R: vector
+
+Vector: 1D object of same data type (eg, all numeric, or all character). Like a column of data in a spreadsheet
+
+```{r echo=TRUE}
+x <- c(1, 4, 7, 11)
+x
+
+```
+
+
+## Data structures in R: data frame
+
+data frame: 2D object consisting of vectors of the same length but of potentially different data types
+
+```{r echo=TRUE}
+x <- c(1, 3, 5)
+g <- c("M", "M", "F")
+df <- data.frame(x, g)
+df
+```
+
+Notice `x` is numeric while `g` is character.[^1]
+
+
+[^1]: Actually, `data.frame` converts character vectors to factors.
+
+
+## Data structures in R: lists
+
+list: the most general data structure. It can contain vectors, data.frames, and other lists. When data wrangling, we sometimes need to work with lists at an intermediate step. 
+
+```{r echo=TRUE}
+lst <- list(x = 5, df = data.frame(x, g))
+lst
+```
+
+
+## Applying functions to elements in a list
+
+The `lapply` function allows us to _apply_ functions to elements of a list. Example: Find the mean of each list element
+
+```{r echo=TRUE}
+(lst <- list(y1 = 1:4, y2 = 6:10))
+lapply(lst, mean)
+```
+
+
+## Dates and Date-times in R
+
+- When a date (eg, April 5, 1982) is formatted as a "date" in R, it becomes the number of days after (or before) January 1, 1970.
+- When a date-time (eg, April 5, 1982 1:15 PM) is formatted as a "date-time", it becomes the number of seconds after (or before) January 1, 1970.
+- This simplifies the calculation of time spans.
+- `lubridate` helps us parse dates and date-times as well as perform calculations and conversions of such values.
+
+## Parsing dates
+
+- `lubridate` provides a series of functions for parsing dates that are a permutation of the letters "m", "d" and "y" to represent the ordering of month, day and year. 
+- `lubridate` provides functions for every permutation of "m", "d", "y".
+
+```{r message=FALSE, echo=TRUE}
+library(lubridate)
+d <- "April 5, 1982"
+d <- mdy(d)
+d
+```
+
+
+## Printed values vs. stored values
+
+- A date that is parsed with `lubridate` will print to the console and appear in data frames as if it's character data.
+- Use `as.numeric` to see the stored value.
+
+```{r echo=TRUE}
+d
+as.numeric(d) # days since 1/1/1970
+
+
+```
+
+
+## Parsing date-times
+
+To parse date-times, append either `_h`, `_hm`, or `_hms` to the "mdy" function.
+
+```{r echo=TRUE}
+d <- "April 5, 1982 1:15 PM"
+d <- mdy_hm(d)
+d
+as.numeric(d) # seconds since 1/1/1970
+```
+
+
+## Parsing times
+
+`lubridate` also allows us to parse hours, minutes and seconds using `hm`, `ms` and `hms`
+
+```{r echo=TRUE}
+t <- c("1:23","2:34")
+hm(t)
+ms(t)
+```
+
+The output is nicely formatted, but these are stored as seconds
+
+## Extracting date components
+
+`lubridate` provides functions such as `month`, `day`, `wday`, `yday`, etc. to extract date components
+
+```{r echo=TRUE}
+d <- mdy("5/5/01")
+month(d, label = TRUE) # month
+wday(d, label = TRUE) # week day
+```
+
+
+
+## Character strings
+
+Our data often include character strings such as names, locations, descriptions, categories or unwanted "junk". Examples of manipulating character strings include...
+
+- Converting text to UPPERCASE or lowercase
+- Extract parts of a string (Eg, extract "`23`" from "`<b>23</b>`")
+- Padding strings with zeroes, so 9, 10, 11 become 009, 010, 011
+- Identify patterns of text for purpose of extracting, replacing or subsetting data
+
+We will use the `stringr` package to work with character strings, which is part of the `tidyverse` package.
+
+## Character data in R
+
+- Character data have quotes when printed to console
+- But data with quotes does not mean it's character!
+- use `is.character()` to find out.
+- Character data need to be surrounded with quotes (either single or double) when used in `R` code
+
+```{r echo=TRUE}
+(x <- c("a","b","c","12"))
+is.character(x)
+```
+
+
+## Character versus factor
+
+- Sometimes data that appear to be character are actually stored as a _factor_
+- factors are character data that are stored as integers but have character labels
+- factors are good for using character data in statistical modeling (eg, ANOVA, regression, etc)
+- If your character data is stored as a factor, R automatically handles conversion to dummy matrices necessary for statistical modeling routines
+- factors do not have quotes when printed to console
+
+
+## Factor data in R
+
+```{r echo=TRUE}
+(y <- factor(c("a","b","c","c")))
+is.character(y)
+
+```
+
+
+## When to convert factors to character
+
+- If you plan to clean or manipulate character data, make sure it's character, not factor.
+- Change factor to character with `as.character` function
+```{r echo=TRUE}
+(y <- factor(c("a","b","c","c")))
+(y <- as.character(y))
+```
+
+
+
+## Convert case of string
+
+- `str_to_upper`, `str_to_lower`, and `str_to_title` do what you expect
+
+```{r echo=TRUE}
+library(stringr)
+str_to_upper("day one")
+str_to_lower("DAY ONE")
+str_to_title("day one")
+```
+
+
+## find-and-remove within strings
+
+- `str_remove` finds first occurrence of specified pattern and removes it
+
+```{r echo=TRUE}
+# find first - and replace with nothing
+str_remove(c("434-555-1212"), "-")
+```
+
+- `str_remove_all` finds all occurrences of specified pattern and removes it
+
+
+```{r echo=TRUE}
+# find all - and replace with nothing
+str_remove_all(c("434-555-1212"), "-")
+```
+
+
+## find-and-replace within strings
+
+- `str_replace` finds first occurrence of specified pattern and replaces with specified text
+
+```{r echo=TRUE}
+str_replace(c("434-555-1212"), "-", ".")
+```
+
+- `str_replace_all` finds all occurrences of specified pattern and replaces with specified text
+
+```{r echo=TRUE}
+str_replace_all(c("434-555-1212"), "-", ".")
+```
+
+
+
+## Pad a string with characters
+
+- `str_pad` will pad a string with characters. This is useful for zip codes or ID numbers. 
+- Specify the width, the side of the padding, and what to pad with.
+
+```{r echo=TRUE}
+(zips <- c(22904, 06443, 01331))
+str_pad(zips, width = 5, side = "left", pad = "0")
+```
+
+
+
+## Regular Expressions
+
+* Regular expressions are a language for describing text patterns (eg: email addresses, social security numbers, html tags)
+* A regular expression is usually formed with some combination of _literal characters_, _character classes_ and _modifiers_
+    + literal character example: `state` (looking for `"state"`)
+    + character class example: `[0-9]` (any number 0 - 9)
+    + modifier example: `+` (1 or more of whatever it follows)
+* Regular expression example: `state[0-9]+` finds patterns such as `state1`, `state12`, `state99` but not `state`
+* We will cover just the basics today as they work in R
+
+
+
+## Character classes
+
+* `[0-9]`, `[a-z]`, `[A-Z]`
+* Define your own: `[0-3a-g]`, `[AEIOUaeiou]`
+* Predefined character classes
+    + `[:alpha:]` all letters
+    + `[:digit:]` numbers 0 - 9
+    + `[:alnum:]` Alphanumeric characters (alpha and digit)
+    + `[:blank:]` Blank characters: space and tab
+    + `[:lower:]` lowercase letters
+    + `[:upper:]` UPPERCASE letters
+    + `[:punct:]` Punctuation characters
+    + `[:print:]` Printable characters: [:alnum:], [:punct:] and space
+    + `[:space:]` Space characters: tab, newline, vertical tab, form feed, carriage return, space 
+
+## Modifiers
+
+- `^`  start of string; or negation inside character class
+- `$`  end of string
+- `.`  any character except new line
+- `*`  0 or more
+- `+`  1 or more
+- `?`  0 or 1
+- `|`  or (alternative patterns)
+- `{}` quantifier brackets: exactly `{n}`; at least `{n,}`; between `{n,m}`
+- `()` group patterns together
+- `\`  escape character (needs to be escaped itself in R! `\\`)
+- `[]` character class brackets
+
+Note: precede these with a double backslash if you want to treat them as literal characters.
+
+
+
+## Basic regular expression examples
+
+- Remove one or more letters followed by `.` and space at beginning of string
+
+```{r echo=TRUE}
+names <- c("Dr. Claibourn","Mr. Ford","Ms. Draber")
+str_remove(names, pattern = "^[:alpha:]+\\. ")
+```
+
+- Replace "Group", "grp", and "group" with "G"
+
+```{r echo=TRUE}
+group <- c("Group 1", "grp 1", "group 3")
+str_replace(group, "(Group |grp |group )", "G")
+    
+```
+
+
+
+## Binding data frames
+
+- Row binding: stacking data frames on top of one another
+- Column binding: setting data frames next to each other
+- Row binding is more common; often used when reading in multiple files of matching structure that need to be combined into one data frame
+- Example: importing 10 Excel worksheets for years 2000 - 2009, and then combining into one data frame
+- `dplyr` functions: `bind_rows` and `bind_cols`
+
+
+## Row binding
+
+`bind_rows(data_frame_01, data_frame_02)`
+
+![](img/bind_rows.jpg)
+
+## Column binding
+
+`bind_cols(data_frame_01, data_frame_02)`[^2]
+
+![](img/bind_cols.jpg)
+
+[^2]: data frames must have the same number of rows.
+
+
+## Merging or Joining data frames
+
+* Two types of merges, or joins:
+    + **Mutating join**: Join data frames based on a common column (or columns), called "keys"
+    + **Filtering join**: keep rows in one data frame based on having (or not having) membership in another data frame
+* Frequently used to combine two different sources of data. 
+* Example: merge subject demographic data with subject lab data
+* `dplyr` functions: `inner_join`, `left_join`, `right_join`, `full_join`, `semi_join`, `anti_join`
+ 
+
+## Inner Join
+
+Retain only those rows with matching keys in both data sets.
+`inner_join(band_members,band_instruments,by="name")`
+
+![](img/inner_join.jpg)
+
+
+## Left Join
+
+Retain everything in the left data set, merge matches from right.
+`left_join(band_members,band_instruments,by="name")`
+
+![](img/left_join.jpg)
+
+## Right Join
+
+Retain everything in the right data set, merge from left.
+`right_join(band_members,band_instruments,by="name")`
+
+![](img/right_join.jpg)
+
+
+## Full Join
+
+Retain all rows in both data sets.
+`full_join(band_members,band_instruments,by="name")`
+
+
+
+![](img/full_join.jpg){height=250px}
+
+## Semi Join
+
+Retain all rows from left that have matching values in right.
+`semi_join(band_members,band_instruments,by="name")`
+
+
+![](img/semi_join.jpg)
+
+## Anti Join
+
+Retain all rows from left that do NOT have matching values in right.
+`anti_join(band_members,band_instruments,by="name")`
+
+![](img/anti_join.jpg)
+
+
+## Reshaping data frames
+
+- Taking column names and making them values in a single column, and vice versa; similiar to transposing data in Excel
+- Often expressed as reshaping "wide to long", or "long to wide"
+- Reshaping wide to long is very common in R; often needed to accommodate modeling and plotting functions
+- `tidyr` functions: `gather` (wide to long) and `spread` (long to wide)
+
+## Reshaping wide to long
+
+"gather" columns week1 - week3 into two columns, one for the column headers (_key_) and the other for the values in the columns (_value_).
+
+`gather(wide_df,key="week",value="count",week1:week3)`
+
+![](img/reshape.jpg)
+
+
+
+## Time to practice!
+
+Let's go the workshop R script for demonstrations and exercises.
+
+
+## References
+
+**R for Data Science**: http://r4ds.had.co.nz/
+
+Free online edition of the O'Reilly book _R for Data Science_, by Garrett Grolemund and Hadley Wickham. 
+
+The UVa Library also has a physical copy.
+
+## See also
+
+This workshop was previously offered as two workshops, where each went into more detail. Here are links to the materials.
+
+Part 1: bind, merge, reshape    
+http://bit.ly/dwr_01
+
+Part 2: dates and strings    
+http://bit.ly/dwr_02
+
+
+## Thanks for coming
+
+* For statistical consulting: statlab@virginia.edu
+
+* Sign up for more workshops or see past workshops:
+http://data.library.virginia.edu/training/
+
+* Register for the Research Data Services newsletter to be notified of new workshops: http://data.library.virginia.edu/newsletters/

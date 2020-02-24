@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1578580044803.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "E3A6C9F5",
+    "lastKnownWriteTime" : 1578580207,
+    "last_content_update" : 1578580207380,
+    "path" : "C:/Users/jcf2d/Dropbox/_statistics/ACD_with_R/Chapter4/BeetleEggCrowding.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "31,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

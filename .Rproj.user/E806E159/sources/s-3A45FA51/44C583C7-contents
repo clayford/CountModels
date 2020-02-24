@@ -1,0 +1,127 @@
+---
+title: "Count Models in R"
+author: "Clay Ford"
+date: "Spring 2020"
+output: 
+    beamer_presentation: 
+        fig_caption: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Motivation
+
+- We sometimes have count data, i.e., non-negative values: 0, 1, 2, 3, ...
+- We want to understand the variability in the count data as well as estimate an expected count given some other information
+- Example: count of physician office visits for people over age 60 given predictors such as education, gender, number of chronic conditions, and insurance status
+- Does knowing insurance status, level of education, etc, help us estimate an expected count of office visits?
+- Count models can help us answer that question
+
+## Probability distributions for counts
+
+Two common probability distributions for counts are the Poisson and negative binomial.
+
+* The Poisson distribution is parameterized by its mean. The mean and variance are equal.
+    + $E(X) = \mu$ and $Var(X) = \mu$
+* The negative binomial is parameterized by a mean and a dispersion parameter ($\theta$ > 0). The variance is greater than the mean.
+    + $E(X) = \mu$ and $Var(X) = \mu + \mu^2/\theta$
+    
+## Simulated poisson distribution
+
+Use the `rpois` function to generate random data from a Poisson distribution with a specified mean.
+
+```{r echo=TRUE}
+# lambda is the mean
+d <- rpois(n = 1000, lambda = 3)
+table(d)
+c(mean(d), var(d))
+```
+
+Notice the mean and variance about equal.
+
+## Simulated poisson distribution
+
+```{r}
+plot(table(d))
+```
+
+
+## Simulated negative binomial distribution
+
+Use the `rnbinom` function to generate random data from a negative binomial distribution with a specified mean and dispersion parameter ($\theta$).
+
+```{r echo=TRUE}
+# size is the dispersion parameter
+d <- rnbinom(n = 1000, mu = 3, size = 2)
+table(d)
+c(mean(d), var(d))
+
+```
+
+Notice the variance is larger than the mean. As $\theta$ gets bigger, the negative binomial approaches a Poisson.
+
+## Simulated negative binomial distribution
+
+```{r}
+plot(table(d))
+```
+
+
+## Basic count models - Poisson
+
+A Poisson count model assumes our count data came from a Poisson distribution with a mean _conditional on predictors_.
+
+```{r echo=TRUE}
+trt <- sample(0:1, size = 10000, replace = T)
+d <- rpois(n = 10000, 
+           lambda = exp(3 + 2*trt))
+log(c(mean(d[trt==0]), var(d[trt==0])))
+log(c(mean(d[trt==1]), var(d[trt==1])))
+```
+
+The mean and variance of `d` is _conditional_ on `trt`. We use `exp` (exponentiate) to ensure lambda is positive, which is what a count model assumes. 
+
+
+## Basic count models - Poisson
+
+A Poisson count model assumes our count data came from a Poisson distribution and attempts to recover the mean _conditional on predictors_. 
+
+The `glm` function with `family = poisson` fits a count model assuming a Poisson distribution. 
+
+```{r echo=TRUE}
+m <- glm(d ~ trt, family = poisson)
+coef(m)
+
+```
+
+The `(Intercept)` is the estimated mean when `trt==0`. Adding `(Intercept)` and `trt` gives the estimated mean when `trt==1`.
+
+## Basic count models - negative binomial
+
+A negative binomial count model assumes our count data came from a negative binomial distribution with a mean _conditional on predictors_ and a fixed theta.
+
+```{r echo=TRUE}
+trt <- sample(0:1, size = 10000, replace = T)
+d <- rnbinom(n = 10000, mu = exp(3 + 2*trt), 
+             size = 1.2)
+log(c(mean(d[trt==0]), var(d[trt==0])))
+log(c(mean(d[trt==1]), var(d[trt==1])))
+```
+
+The mean and variance of `d` is _conditional_ on `trt`.
+
+## Basic count models - negative binomial
+
+A negative binomial count model assumes our count data came from a negative binomial distribution and attempts to recover the mean _conditional on predictors_ as well as theta. 
+
+The `glm.nb` function from the `MASS` package fits a count model assuming a negative binomial distribution. 
+
+```{r echo=TRUE}
+library(MASS)
+m <- glm.nb(d ~ trt)
+coef(m)
+m$theta
+```
+
