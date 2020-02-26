@@ -1,0 +1,77 @@
+
+# YOUR TURN #1 ------------------------------------------------------------
+
+# Run the following lines of code to generate y
+set.seed(4)
+grp <- sample(c("a","b"), size = 300, replace = T)
+x1 <- runif(n = 300, min = 1, max = 10)
+y <- rpois(n = 300, lambda = exp(1.8 + 1.5*(grp=="b") + -0.6*x1))
+
+# (1) Plot the distribution of y
+plot(table(y))
+
+# (2) Fit a model that attempts to "recover" the true values in the model
+#     specified above.
+m <- glm(y ~ grp + x1, family = poisson)
+summary(m)
+
+# (3) Simulate data from the model and compare to the original observed data.
+sim_y <- rpois(n = 300, lambda = exp(coef(m)[1] + coef(m)[2]*(grp == "b") + 
+                                   coef(m)[3]*x1))
+
+plot(density(y))
+lines(density(sim_y), col = "red")
+
+
+# YOUR TURN #2 ------------------------------------------------------------
+
+# (1) Add kid5 to the following model:
+# phd.pois <- glm(articles ~ female + mentor, data = PhdPubs, family = poisson)
+m3 <- glm(articles ~ female + mentor + kid5, 
+          data = PhdPubs, family = poisson)
+summary(m3)
+
+# (2) Interpret the coefficient for kid5
+confint(m3) %>% exp()
+
+# Each additional kid decreases expected mean number of published articles by
+# about 14%.
+
+
+# YOUR TURN #3 ------------------------------------------------------------
+
+
+# (1) Add married and phdprestige to the following model and save as a new model
+# object.
+# phd.pois <- glm(articles ~ female + mentor + kid5, data = PhdPubs, family = poisson)
+m4 <- glm(articles ~ female + mentor + kid5 + married + phdprestige, 
+          data = PhdPubs, family = poisson)
+summary(m4)
+
+# (2) Create a rootogram of the model
+countreg::rootogram(m4)
+
+
+# YOUR TURN #4 ------------------------------------------------------------
+
+
+# Recall the distribution of PhD articles. Might there be 0 inflation? Maybe
+# some candidates are trying to publish but haven't just yet. And there may be
+# others who have no intention or desire to publish. Two sources of zeroes.
+table(PhdPubs$articles) %>% plot()
+
+# (1) Fit a zero-inflated negative binomial model using all predictors. Call it
+# phd.zinb. 
+phd.zinb <- zeroinfl(articles ~ ., data = PhdPubs, dist = "negbin")
+summary(phd.zinb)
+
+# (2) Compare the zero-inflated negative binomial model to the negative binomial
+# model we fit earlier (phd.nb) using AIC.
+AIC(phd.nb, phd.zinb)
+BIC(phd.nb, phd.zinb)
+
+# (3) Compare rootograms for the two models
+countreg::rootogram(phd.nb)
+countreg::rootogram(phd.zinb)
+
+
