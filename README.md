@@ -10,4 +10,14 @@ R is available to everyone. The only prior knowledge assumed for this workshop i
 
 ## Workshop Materials
 
-Coming soon.
+[count_models_in_r.zip](https://github.com/clayford/CountModels/raw/master/count_models_in_r.zip)
+
+## References
+
+[Regression Models for Count Data in R](https://www.jstatsoft.org/article/view/v027i08)    
+Achim Zeileis, Christian Kleiber, Simon Jackman   
+Journal of Statistical Software, Vol 27 (2008) Issue 8   
+
+[Visualizing Count Data Regressions Using Rootograms](https://arxiv.org/pdf/1605.01311.pdf)   
+Christian Kleiber, Achim Zeileis      
+The American Statistician, Vol 70 (2016) Issue 3
