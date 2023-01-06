@@ -1,6 +1,6 @@
 ## Modeling Count Data with R
 
-Wed 2/26/2020  
+Thurs, March 2, 2023    
 10:00-12:00     
 
 ## Workshop description
@@ -10,7 +10,7 @@ R is available to everyone. The only prior knowledge assumed for this workshop i
 
 ## Workshop Materials
 
-[count_models_in_r.zip](https://github.com/clayford/CountModels/raw/master/count_models_in_r.zip)
+TBA
 
 ## References
 

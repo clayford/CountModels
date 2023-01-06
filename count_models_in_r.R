@@ -372,7 +372,7 @@ str(PhdPubs)
 # married: dummy variable for marital status, 1 = married
 # kid5: number of young children, age 5 and under
 # phdprestige: prestige of the PhD department
-# mentor: number of publications by the mentor in the preceeding three years
+# mentor: number of publications by the mentor in the preceding three years
 
 summary(PhdPubs)
 

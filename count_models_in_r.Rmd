@@ -1,0 +1,716 @@
+---
+title: "Modeling Count Data with R"
+author: "Clay Ford, Statistical Research Consultant, UVA Library"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+## Quick Intro to R Notebooks and R Markdown
+
+This is an R Markdown Notebook. When you execute R code within the notebook, the results appear beneath the code.  
+
+This file was created in RStudio by going to File...New File...R Notebook.
+
+R code needs to be in "chunks" in an R Markdown Notebook. Below is an example of an R code chunk. It makes a parabola.
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter* (Win/Linux) or *Cmd+Shift+Return* (Mac). 
+
+```{r}
+x <- seq(-1, 1, by = 0.01)
+y <- x^2
+plot(x, y, type = "l")
+```
+
+To hide the output, click the Expand/Collapse output button. To clear results (or an error), click the "x". 
+
+You can also press *Ctrl+Enter* (Win/Linux) or *Cmd+Return* (Mac) to run one line of code at a time (instead of the entire chunk).
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+## CODE ALONG 0
+
+Insert a new R code chunk below and type and run the code: Sys.time()
+
+
+## Packages
+
+Let's load some packages we're going to use today.
+
+```{r}
+# install.packages("countreg", repos="http://R-Forge.R-project.org")
+library(countreg)
+
+library(pscl)
+library(AER)
+library(tidyverse)
+library(ggeffects)
+```
+
+## Linear Model Review
+
+Let's say we have the following data:
+
+```{r}
+x <- 1:25
+y <- 10 + 5*x
+plot(x, y)
+```
+
+
+10 is the intercept, 5 is the slope.
+y is completely determined by x.
+
+Let's add some "noise" to our data by adding random draws from a Normal distribution with mean = 0 and a standard deviation = 10.
+
+set.seed(1) ensures we all get the same "random" data
+
+```{r}
+set.seed(1)
+noise <- rnorm(n = 25, mean = 0, sd = 10)
+```
+
+
+Add the noise to 10 + 5*x and re-draw plot
+
+```{r}
+y <- 10 + 5*x + noise
+plot(x, y)
+```
+
+
+This data is the combination of two parts:
+
+1. 10 + 5*x
+2. rnorm(n = 25, mean = 0, sd = 10)
+
+We could also combine the two parts in a single call to `rnorm()` where we enter `10 + 5*x` as the mean. In other words, randomly generate Normal data with a _conditional mean_.
+
+```{r}
+set.seed(1)
+y <- rnorm(n = 25, mean = 10 + 5*x, sd = 10)
+plot(x, y)
+```
+
+
+Each y is drawn from a Normal distribution with mean _dependent on x_.
+
+What if we were given this data and told to determine the process that
+generated it? In other words, work backwards and fill in the blanks:
+
+1. ____ + ____*x  (fixed part)
+2. rnorm(n = 25, mean = 0, sd = ____)  (random part)
+
+That's basically what linear modeling is. Proposing a model and finding the most likely values of the model parameters.
+
+Traditional linear modeling assumes the following:
+
+1. the formula is a weighted sum of predictors (eg, 10 + 5*x)
+2. the noise is a random draw from a Normal distribution with mean = 0
+3. the standard deviation of the Normal distribution is constant
+
+Linear modeling tries to recover the weights (or coefficients) in the first
+assumption (10 and 5) and the standard deviation in the 3rd assumption (10).
+
+To do this we can use lm(). The syntax "y ~ x" means we think Part 1 of the model is "y = intercept + slope*x". We usually save the model into an object. Below I save it to "mod".
+
+```{r}
+mod <- lm(y ~ x)
+summary(mod)
+```
+
+The model returns the following estimates:
+
+- intercept = 11.135
+- slope = 5.042
+- sd = 9.7 (Residual standard error)
+
+We can use our model to generate data and see if it looks similar to our original data.
+
+```{r}
+y_sim <- simulate(mod, nsim = 20)
+plot(density(y))
+for(i in 1:20)lines(density(y_sim[[i]]), col = "grey80")
+
+```
+
+Hence this is linear modeling:
+
+1. propose and fit model(s)
+2. determine if the model is good
+3. use the model to explain relationships or make predictions
+
+Today we look at _count models_ where we relax the assumptions that each response value is drawn from a Normal distribution with constant variance.
+
+## Distributions for counts
+
+### Poisson distribution
+
+Use the `rpois()` function to generate random data from a Poisson distribution with a specified mean. Notice the data are positive integers greater than or equal to 0.
+
+lambda is the mean; the variance and mean are equal in Poisson distributions.
+
+Sample data from a Poisson distribution with a mean of 3. Note that lambda can take decimal values.
+
+```{r}
+set.seed(1)
+y1 <- rpois(n = 1000, lambda = 3)
+# counts of the distinct values
+table(y1)
+
+```
+
+
+visual of the distribution of counts
+
+```{r}
+table(y1) |> plot()
+```
+
+
+We can also visualize the proportion of counts.
+
+```{r}
+table(y1) |> proportions() |> plot()
+```
+
+Notice the mean and variance are roughly equal:
+
+```{r}
+c(mean(y1), var(y1)) 
+```
+
+
+
+### Negative binomial distribution
+
+We can use the `rnbinom()` function to generate random data from a negative binomial distribution with a specified mean and dispersion parameter (theta).
+
+mu is the mean. The size argument is the dispersion parameter (theta). The negative binomial allows the _variance to be greater than the mean_.
+
+Var = mu + mu^2/theta
+
+Let's sample data from a negative binomial distribution with a mean = 3 and theta = 2. Notice the data are positive integers greater than or equal to 0.
+
+```{r}
+set.seed(2)
+y2 <- rnbinom(n = 1000, mu = 3, size = 2)
+# counts of the distinct values
+table(y2)
+
+```
+
+Visualize the distribution of counts
+
+```{r}
+table(y2) |> plot()
+```
+
+Visualize the proportion of counts:
+
+```{r}
+table(y2) |> proportions() |> plot()
+```
+
+The mean and variance are not equal. The variance is larger
+
+```{r}
+c(mean(y2), var(y2)) 
+```
+
+As theta gets big, the negative binomial converges to a Poisson distribution. Notice in the randomly generated data below with a huge theta that the estimated mean and variance are about equal, like a Poisson distribution.
+
+```{r}
+y3 <- rnbinom(n = 1000, mu = 3, size = 2000)
+c(mean(y3), var(y3)) 
+```
+
+
+
+## Simulating count data with conditional mean
+
+Above we plugged in a single mean. But perhaps the mean depends on some other variable(s). Perhaps the mean is lower for an "untreated" group than the mean for a "treated" group.
+
+Let's simulate a bunch of 0s and 1s to indicate untreated and treated
+
+```{r}
+set.seed(11)
+trt <- sample(0:1, size = 1000, replace = T)
+```
+
+Now we randomly sample from a Poisson distribution with a mean of `exp(1.2 + 1.8*trt)`
+
+```{r}
+set.seed(22)
+y1 <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))
+```
+
+
+Why use exp()? That ensures we get a positive mean. Lambda has to be positive. Here it's not necessary but as we'll see this transformation is built into count models.
+
+expected count when trt = 0
+
+```{r}
+exp(1.2) # about 3
+```
+
+expected count when trt = 1
+
+```{r}
+exp(1.2 + 1.8) # about 20
+```
+
+Plot of y1 distribution. Notice the two distinct humps for each group.
+
+```{r}
+table(y1) %>% plot()
+```
+
+Let's do the same for a negative binomial distribution
+
+Randomly sample from a negative binomial distribution with a mean of `exp(1.2 + 1.8*trt)` and a dispersion of 10. Notice again the two distinct humps and that the data is much more dispersed (ie, has more variance)
+
+```{r}
+set.seed(33)
+y2 <- rnbinom(n = 1000, mu = exp(1.2 + 1.8*trt), size = 10)
+table(y2) %>% plot()
+```
+
+## Count modeling with simulated data
+
+Let's pretend we don't know the formula used to generate the counts: 
+1.2 + 1.8*trt. 
+
+How to recover those "true" values? This is essentially count modeling.
+
+### Fitting a Poisson count model
+
+We use the `glm()` function to fit a poisson count model. Use the same way as `lm()`, but include the family argument: `family = poisson` 
+
+The `link = "log"` argument is assumed by default but is included here for completeness.
+
+Let's fit a model to our simulated data. We generated the data so we know the correct model to specify!
+
+Th "correct" model:
+`y1 <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))`
+
+`y1 ~ trt` is shorthand for "y1 = (Intercept) + slope*trt"
+
+```{r}
+m1 <- glm(y1 ~ trt, family = poisson(link = "log"))
+summary(m1)
+```
+
+We can extract the coefficients using `coef()`
+
+```{r}
+coef(m1)
+```
+
+The coefficients are very close to the "true" values of 1.2 and 1.8.
+
+Notice the coefficients are on the log scale. We need to use `exp()` to get the coefficients on the original scale. The original scale is the _expected counts_.
+
+When trt == 0 the expected mean count is about 3.2.
+
+exp(1.176377 + 1.814068 * 0) = exp(1.176377)
+
+```{r}
+coef(m1)["(Intercept)"] |> exp()
+```
+
+When trt == 1 (sum both coefficients) the expected mean count is about 20
+
+exp(1.176377 + 1.814068 * 1) = exp(2.990444)
+
+```{r}
+sum(coef(m1)) |> exp()
+```
+
+Exponentiating the slope coefficient tells us the _multiplicative effect_ of trt == 1. Expected count of y when trt = 1 is about 6.1 times the expected count when trt = 0.
+
+```{r}
+coef(m1)["trt"] |> exp()
+```
+
+Again, the expected count of y when trt = 1 is about 6.1 times the expected count when trt = 0.
+
+```{r}
+exp(coef(m1)["(Intercept)"]) * 6.109849
+```
+
+This is precisely the expected count we calculated above.
+
+```{r}
+sum(coef(m1)) %>% exp()
+
+```
+
+Let's use our model to simulate some data and see if it looks similar to our observed data set.
+
+```{r}
+sim_y1 <- rpois(n = 1000, lambda = exp(1.176377 + 1.814068*trt))
+par(mfrow = c(1,2))
+plot(table(y1), main = "original")
+plot(table(sim_y1), main = "model simulated")
+
+```
+
+
+We could also plot smooth density curves that approximate the distribution, though some may argue this is not appropriate for discrete data. 
+
+```{r}
+sim_y1 <- simulate(m1, nsim = 50)
+plot(density(y1, from = 0))
+for(i in 1:50)lines(density(sim_y1[[i]], from = 0), 
+                    col = "grey80", lty = 3)
+```
+
+### Fitting a Negative binomial count model
+
+We use the `glm.nb()` function from the MASS package to fit a negative binomial model. No need to specify the family argument. The `link = log` argument is assumed by default but is included here for completeness.
+
+Let's fit a model to our simulated data. We generated the data so we know the correct model to specify!
+
+`y2 <- rnbinom(n = 1000, mu = exp(1.2 + 1.8*trt), size = 10)`
+
+```{r}
+m2 <- glm.nb(y2 ~ trt, link = log)
+summary(m2)
+```
+
+We can extract theta from the model object if needed:
+
+```{r}
+m2$theta
+```
+
+And we can use `coef()` to extract the coefficients.
+
+```{r}
+coef(m2)
+```
+
+Again, the coefficients are very close to the "true" values of 1.2, 1.8 and 1.2
+
+And again we need to use `exp()` to get our expected counts on the original scale, which is expected counts.
+
+When trt == 0 the expected mean count is about 3.3
+
+```{r}
+coef(m2)["(Intercept)"] |> exp()
+```
+
+When trt == 1 (sum both coefficients) the expected mean count is about 19.6
+
+```{r}
+sum(coef(m2)) |> exp()
+```
+
+The multiplicative effect of trt==1 is about 5.9.
+
+```{r}
+coef(m2)["trt"] |> exp()
+```
+
+Let's use our model to simulate some data and see if it looks similar to our oberved data set.
+
+```{r}
+sim_y2 <- rnbinom(n = 1000, mu = exp(coef(m2)[1] + coef(m2)[2]*trt), 
+                  size = m2$theta)
+par(mfrow = c(1,2))
+plot(table(y2), main = "original")
+plot(table(sim_y2), main = "model simulated")
+
+```
+
+We could also plot smooth density curves that approximate the distribution
+
+```{r}
+sim_y2 <- simulate(m2, nsim = 50)
+plot(density(y2, from = 0))
+for(i in 1:50)lines(density(sim_y2[[i]], from = 0), 
+                    col = "grey80", lty = 3)
+```
+
+## CODE ALONG #1
+
+Run the following lines of code to generate y
+
+```{r}
+set.seed(4)
+grp <- sample(c("a","b"), size = 300, replace = T)
+x1 <- runif(n = 300, min = 1, max = 10)
+y <- rpois(n = 300, lambda = exp(1.8 + 1.5*(grp=="b") + -0.6*x1))
+```
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+1. Fit a model that attempts to "recover" the true values in the model specified above.
+
+
+2. Simulate data from the model and compare to the original observed data.
+
+## Deviance
+
+
+Let's look again at the summary of m1, the poisson model:
+
+```{r}
+summary(m1)
+```
+
+
+Notice the lines for Null deviance and Residual deviance. 
+
+```
+    Null deviance: 7784.1  on 999  degrees of freedom
+Residual deviance: 1099.3  on 998  degrees of freedom
+
+```
+
+Residuals represent the difference between what we observed and what our model predicts. There are several types of residuals for GLM models. The Null and Residual deviance are the sum of squares of the _deviance residuals_.
+
+Residual deviance "by hand"
+
+```{r}
+sum(residuals(m1, type = "deviance")^2)
+```
+
+
+Null deviance "by hand"
+
+The null deviance is the sum of squared deviance residuals for a model with no predictors, just an intercept: y1 ~ 1
+
+```{r}
+null_m1 <- glm(y1 ~ 1, family = poisson)
+sum(residuals(null_m1, type = "deviance")^2)
+
+```
+
+Three things to remember about deviance...
+
+1. Deviance is a measure of error, lower means better
+2. If a predictor is just noise and has no explanatory power, we expect deviance to decrease by 1 on average.
+3. When a useful predictor is added to a model, we expect deviance to decrease by more than 1.
+
+We see a huge decrease in deviance in m1. 
+
+## Poisson count modeling with real data
+
+Let's load some real data to explore and model. A data set giving the number of publications (articles) by doctoral candidates in biochemistry in relation to various predictors. 
+
+Source: "Discrete Data Analysis with R" by Michael Friendly and David Meyer.
+
+Of interest is if the count of articles can be modeled as a function of the other variables. We don't know the "true" model or whether or not these variables have anything to do with the count of articles.
+
+```{r}
+data("PhdPubs", package = "vcdExtra")
+str(PhdPubs)
+```
+
+- articles: number of articles published in final three years of PhD studies
+- female: indicator variable for gender, 1 = female
+- married: indicator variable for marital status, 1 = married
+- kid5: number of young children, age 5 and under
+- phdprestige: prestige of the PhD department
+- mentor: number of publications by the mentor in the preceding three years
+
+```{r}
+summary(PhdPubs)
+```
+
+Make female and married Factors
+
+```{r}
+PhdPubs$female <- factor(PhdPubs$female, labels = c("no", "yes"))
+PhdPubs$married <- factor(PhdPubs$married, labels = c("no", "yes"))
+```
+
+Plot the response variable: number of published articles
+
+```{r}
+plot(table(PhdPubs$articles))
+```
+
+The number of published articles has quite a bit of variability. Do the other variables perhaps "explain" some of the variability?
+
+Let's fit a Poisson model using female and mentor. 
+
+```{r}
+phd.pois <- glm(articles ~ female + mentor, 
+                data = PhdPubs, 
+                family = poisson)
+summary(phd.pois)
+```
+
+Naive interpretation of coefficients.
+
+The coefficients represent the increase/decrease in the _log expected count_ of articles. 
+
+```{r}
+coef(phd.pois)
+```
+
+
+If we exponentiate, we get the multiplicative effect (holding other predictors constant.)
+
+```{r}
+exp(coef(phd.pois))
+
+```
+
+
+If we exponentiate, multiply by 100 and subtract 1, we get the percent increase or decrease.
+
+```{r}
+100 * (exp(coef(phd.pois)) - 1)
+
+```
+
+
+All together in a matrix using cbind(), rounded to 3 decimal places
+
+```{r}
+round(
+  cbind(beta = coef(phd.pois),
+        exp_beta = exp(coef(phd.pois)),
+        pct = 100 * (exp(coef(phd.pois)) - 1)),
+  3)
+
+```
+
+The expected number of publications for female candidates is about 0.83 times that of male candidates, or about a 17% decrease
+
+Each additional mentor publication increases expected count of published articles by a factor of about 1.025, or about 2.5%.
+
+Using both predictors seem to be better than using just an intercept according to the null and residual deviance.
+
+
+### Confidence intervals
+
+Confidence intervals give us a sense of how certain these estimated effects are. Since we exponentiate, overlapping 1 (instead of 0) indicates an uncertain direction in magnitude.
+
+```{r}
+exp(confint(phd.pois))
+
+```
+
+
+The effect of female is estimated to decrease expected published article count anywhere from a factor of 0.75 to 0.92, or 25% to 8%.
+
+We should check the fit of the model before putting too much stock into these interpretations. We could do something like the following, where we simulate counts from our model and compare to the observed data. Notice our model is estimating much fewer 0 counts and far fewer bigger counts. Re-run the chunk multiple times if you like.
+
+```{r}
+sim_articles <- simulate(phd.pois)
+par(mfrow = c(1,2))
+plot(table(PhdPubs$articles))
+plot(table(sim_articles$sim_1))
+```
+
+This doesn't look good. We'll explore another model fit visualization below called _rootograms_.
+
+## CODE ALONG #2
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
+
+1. Add kid5 to the previous model and save the result as `phd.pois2`:
+
+```
+phd.pois <- glm(articles ~ female + mentor, 
+                data = PhdPubs, family = poisson)
+```
+
+```{r}
+phd.pois2 <- glm(articles ~ female + mentor + kid5, 
+                data = PhdPubs, family = poisson)
+
+```
+
+
+2. Interpret the coefficient for kid5
+
+
+## Evaluating model fit with rootograms 
+
+A good fitting model should generate counts that look similar to the original data.
+
+In the previous code along exercise we proposed the following model:
+
+`articles = (Intercept) + female + married + kid5`
+
+The result of the model was an intercept and coefficients for the 3 predictors
+
+```{r}
+coef(phd.pois2)
+
+```
+
+
+Previously we simulated data and compared bar plots of the original data with the simulated data. Another way to visualize model fit for count models is through _rootograms_.
+
+The countreg package provides the rootogram() function to quickly generate "hanging" rootograms to visualize goodness of fit.
+
+```{r}
+countreg::rootogram(phd.pois2)
+```
+
+The red dots and connector lines visualize the model's expected number of articles.
+
+The length of the bars are the _observed counts_. Notice the counts have been transformed with a square root transformation. That's to help smaller counts not get squashed by larger counts.
+
+Bars that dip below 0 are underfit; bars that hang above 0 are overfit.
+
+We can use the max argument to increase or decrease the count displayed
+
+```{r}
+countreg::rootogram(phd.pois, max = 15)
+```
+
+
+There are two other styles available: standing and suspended
+
+The standing version basically plots the model predicted counts over the oberserved counts.
+
+```{r}
+countreg::rootogram(phd.pois2, style = "standing")
+```
+
+The suspended version uses less ink and shows just the under and over-fit counts.
+
+```{r}
+countreg::rootogram(phd.pois2, style = "suspended")
+```
+
+ggplot2 version
+
+```{r}
+autoplot(rootogram(phd.pois2))
+```
+
+This is an ok not great fitting model. We are underfitting 0 counts, overfitting
+1, 2, and 3 counts, then underfitting counts 4 - 7.
+
+Recall our earlier toy model for which we fit the "correct" model. Notice we're not consistently over or underfitting counts. The counts seem to vary around 0 randomly.
+
+```{r}
+countreg::rootogram(m1)
+```
+
+See Appendix at conclusion of notebook for how to make rootograms "by hand".
+
+## CODE ALONG #3
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
+
+1. Add married and phdprestige to the following model and save as a new model object named "phd.pois3".
+
+```
+phd.pois <- glm(articles ~ female + mentor + kid5, data = PhdPubs, family = poisson)
+```
+
+2. Create a rootogram of the model
+
+## Negative Binomial count modeling with real data
+
+
