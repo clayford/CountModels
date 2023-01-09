@@ -43,7 +43,7 @@ library(countreg)
 
 library(pscl)
 library(AER)
-library(tidyverse)
+library(ggplot2)
 library(ggeffects)
 ```
 
@@ -433,7 +433,7 @@ for(i in 1:50)lines(density(sim_y2[[i]], from = 0),
                     col = "grey80", lty = 3)
 ```
 
-## CODE ALONG #1
+## CODE ALONG 1
 
 Run the following lines of code to generate y
 
@@ -610,7 +610,7 @@ plot(table(sim_articles$sim_1))
 
 This doesn't look good. We'll explore another model fit visualization below called _rootograms_.
 
-## CODE ALONG #2
+## CODE ALONG 2
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
 
@@ -699,7 +699,7 @@ countreg::rootogram(m1)
 
 See Appendix at conclusion of notebook for how to make rootograms "by hand".
 
-## CODE ALONG #3
+## CODE ALONG 3
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
 
@@ -712,5 +712,657 @@ phd.pois <- glm(articles ~ female + mentor + kid5, data = PhdPubs, family = pois
 2. Create a rootogram of the model
 
 ## Negative Binomial count modeling with real data
+
+Recall the negative binomial model accommodates unequal mean and variance. This allows us to model "overdispersion". That is, when we have counts with larger variance than their mean.
+
+The PhdPubs data appears to exhibit some overdispersion
+
+```{r}
+c(mean(PhdPubs$articles), 
+  var(PhdPubs$articles))
+  
+```
+
+
+The AER package provides a formal test of overdispersion with the `dispersiontest()` function. The null is the mean and variance are equal. Rejecting the null with a small p-value provides evidence of overdispersion.
+
+```{r}
+phd.pois3 <- glm(articles ~ female + mentor + kid5 + married + phdprestige,
+                 data = PhdPubs, family = poisson)
+```
+
+The first argument is a fitted Poisson model.
+
+```{r}
+AER::dispersiontest(phd.pois3)
+```
+
+The super small p-value suggests we probably have overdispersion and that a Poisson model may not be suitable, which is also what we saw with the rootogram. In this case a negative binomial model may be more suitable since it accommodates overdispersion.
+ 
+The glm.nb function in the MASS package fits a negative binomial model
+
+```{r}
+phd.nb <- glm.nb(articles ~ ., data = PhdPubs)
+summary(phd.nb)
+```
+
+
+The interpretation of the coefficients is the same as a Poisson model.
+
+```{r}
+
+exp(coef(phd.nb))
+
+```
+ 
+Is this model better than the Poisson model? We can asses this question using the AIC/BIC information criteria. Models with lower values are preferred.
+
+```{r}
+AIC(phd.pois3, phd.nb)
+```
+
+```{r}
+BIC(phd.pois3, phd.nb)
+```
+
+
+A rootogram allows us to asses how well the model fits the observed data.
+
+```{r}
+countreg::rootogram(phd.nb)
+```
+
+This certainly seems to fit much better.
+
+## Zero-inflated count models
+
+It's not unusual for real life count data to have more zeroes than would be expected of a Poisson or negative binomial model. When this happens we say we have "zero inflation".
+
+A common approach to modeling such data is to create a mixture of two models to account for the extra zeroes:
+
+1. a model for the occurrence of zeroes
+2. a model for the counts, which can also include zeroes
+
+Example: survey random sample of UVA students and ask how many alcoholic drinks they consumed over the most recent weekend.
+
+- Some don't drink, always zero
+- Some do drink but perhaps didn't drink that weekend, second source of zeroes
+
+Let's simulate data with these qualities.
+
+To begin we'll simulate zeroes and ones using `rbinom()` which allows us to randomly sample from a binomial distribution. A binomial distribution has two parameters: 
+
+- size (number of "trials") 
+- probability (chance of "success"). 
+
+Below we generate 300 draws from a binomial distribution with size = 1 and prob = 0.7. This says 70% of the time we will draw a 1, which implies 30% of the time we will draw 0.
+
+```{r}
+set.seed(10)
+zi <- rbinom(300, size = 1, prob = 0.7)
+```
+
+Next we'll create a binary predictor variable called "trt"
+
+```{r}
+trt <- rep(0:1, each = 150)
+```
+
+Now we'll simulate counts _conditional_ on our draws from the binomial distribution. If it's a 0, keep it. These are the "always zero" values. Otherwise take the result from a Poisson distribution with mean = exp(0.05 + 0.8*trt). This will produce additional zeroes.
+
+The mean of the Poisson distribution is as follows: 
+
+1. 0.05 when trt = 0
+2. 0.05 + 0.8 = 0.85 when trt = 1
+
+```{r}
+set.seed(11)
+y <- ifelse(zi == 0, 0, rpois(300, lambda=exp(0.05 + 0.8*trt)))  
+dat <- data.frame(y, trt)
+plot(table(dat$y))
+```
+
+Now let's fit a model to our data that does _not_ accommodate excess zeroes and look at the rootogram
+
+```{r}
+mod1 <- glm(y ~ trt, data = dat, family = poisson)
+summary(mod1)
+```
+
+The summary looks good if you're into significant p-values, but the rootogram tells a different story.
+
+```{r}
+countreg::rootogram(mod1)
+```
+
+Underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
+ 
+Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function from the pscl package. This fits two models, separated by the |
+
+1. a Poisson count model: y ~ trt
+2. a binomial model: 1 (intercept only model)
+
+Notice the summary shows results for two models: a count model and a zero-inflation model.
+
+```{r}
+mod2 <- pscl::zeroinfl(y ~ trt | 1, data = dat, dist = "poisson")
+summary(mod2)
+```
+
+The rootogram shows a much better fitting model.
+
+```{r}
+countreg::rootogram(mod2)
+```
+
+
+We can use the `plogis()` function to take the inverse logit of the binomial model coefficient to get the estimated probability of being an "always zero" count. Notice we come close to the "true" value of 0.3 we used to simulate the data.
+ 
+```{r}
+plogis(coef(mod2)["zero_(Intercept)"])
+```
+
+
+We can also simulate zero-inflated data that includes a negative binomial count model.
+
+Once again we start by simulating zeroes and ones using `rbinom()` which allows us to randomly sample from a binomial distribution. This time we use a sample size of 1000.
+
+```{r}
+set.seed(6)
+zi <- rbinom(1000, size = 1, prob = 0.7)
+```
+
+Next we simulate counts _conditional_ on our draws from the binomial distribution. If it's a 0, keep it. These are the "always zero" values. Otherwise take the result from a negative binomial distribution with mean = exp(0.6 + 1.8*trt) and theta = 9. This will produce additional zeroes.
+
+The mean of the negative binomial distribution is as follows: 
+
+1. 0.6 when trt = 0
+2. 0.6 + 1.8 = 24 when trt = 1
+
+```{r}
+set.seed(66)
+trt <- rep(0:1, each = 500)
+y2 <- ifelse(zi == 0, 0, rnbinom(1000, mu=exp(0.6 + 1.8*trt), size = 9))  
+dat2 <- data.frame(y2, trt)
+plot(table(dat2$y2))
+```
+
+If we model the data without accounting for the excess zeroes we get a badly fitting rootogram.
+
+```{r}
+mod3 <- glm.nb(y2 ~ trt, data = dat2)
+countreg::rootogram(mod3)
+```
+
+It's worth repeating: underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
+
+Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function. This fits two models, separated by the |
+
+1. a negative binomial count model: y2 ~ trt
+2. a binomial model: 1 (intercept only model)
+
+The summary shows the results for two models: a count model and a zero-inflation model.
+
+```{r}
+mod4 <- pscl::zeroinfl(y2 ~ trt | 1, data = dat2, dist = "negbin")
+summary(mod4)
+```
+
+
+The rootogram looks great. It should. We're fitting the "correct" model.
+
+```{r}
+countreg::rootogram(mod4)
+```
+
+And if we take the inverse logit of the binomial model, we see an estimated probability that is close to the "true" value of 0.3.
+
+```{r}
+plogis(coef(mod4)["zero_(Intercept)"])
+
+```
+
+If we don't specify anything after the |, the `zeroinfl()` function assumes you want to use all predictors in both models.
+
+```{r}
+mod5 <- pscl::zeroinfl(y2 ~ trt, data = dat2, dist = "negbin")
+summary(mod5)
+```
+
+Notice trt is included in the Zero-inflation model, but it doesn't appear to be useful.
+
+## CODE ALONG 4
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
+
+Recall the distribution of PhD articles. Might there be 0 inflation? Maybe some candidates are trying to publish but haven't just yet. And there may be others who have no intention to publish. Two sources of zeroes.
+
+```{r}
+plot(table(PhdPubs$articles))
+
+```
+
+1. Fit a zero-inflated negative binomial model using all predictors. Call it "phd.zinb". 
+
+2. Compare the zero-inflated negative binomial model to the negative binomial model we fit earlier (phd.nb) using AIC and BIC.
+
+
+3. Compare rootograms for the two models.
+
+
+## Effect plots 
+
+Effect plots help us visualize our models. They allow us to see the effects of certain predictors holding others at a common value such as a mean, median or mode. We essentially make predictions with our model using various values of a "focal predictor" with all other predictors set to a fixed value.
+
+Effect plots are very useful for visualizing _interactions_ and _non-linear effects_.
+
+### Interaction example
+
+Below we model count of articles published as a function of phdprestige, mentor, and their interaction. This says the effect of phdprestige depends on mentor and vice versa. What's the effect of phdprestige? It depends on mentor.
+
+```{r}
+phd.nb2 <- glm.nb(articles ~ phdprestige + mentor +
+                   phdprestige:mentor, data = PhdPubs)
+summary(phd.nb2)
+```
+
+The interaction coefficient appears to be small and negative. What does it mean? How do these two variable interact? Let's create an effect plot.
+
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "phdprestige"))
+plot(mentor_eff)
+
+```
+
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "phdprestige[1,3,5]"))
+plot(mentor_eff)
+
+```
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb2, 
+                        terms = c("phdprestige","mentor[3,6,9,12]"))
+plot(mentor_eff)
+```
+
+
+### Non-linear effect example
+
+A common approach to modeling non-linear effects is to use a flexible cubic spline. Below we model the count of articles as function of mentor with a 3 degree of freedom natual cubic spline. The 3 degrees of freedom says we think the trajectory of the count could potentially change 3 times as mentor increases. One way to think of splines is as a more sophisticated version of polynomials (eg, x + x^2 + x^3).
+
+Below we load the splines package that comes with R and use the `ns()` function to create what is called a "spline basis". This basically transforms the single mentor variable into three separate variables to allow for a non-linear relationship. Notice the output is impossible to interpret other than to conclude that the non-linear effects may be justified.
+
+```{r}
+library(splines)
+phd.nb3 <- glm.nb(articles ~ ns(mentor, df = 3), data = PhdPubs)
+summary(phd.nb3)
+```
+
+Once again effect plots can help us visualize the non-linear effect.
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor")
+plot(mentor_eff)
+
+```
+
+We can look at just a certain range of mentor using the syntax `mentor[10:40]`
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor[10:40]")
+plot(mentor_eff)
+```
+
+
+## Rate models 
+
+Not all counts are created equal. For example two intersections may have similar counts of accidents per month. But if one intersection handles much less traffic than the other and has a similar number of accidents, then clearly it seems more dangerous.
+
+Let's simulate some data to illustrate.
+
+```{r}
+set.seed(4) 
+
+# Exposure = number of opportunities for something to happen
+exposure <- round(runif(n = 200, min = 100, max = 20000))
+
+# some sort of grouping or treatment condition
+trt <- sample(0:1, 200, replace = TRUE)
+
+# generate counts where the mean is exp(3) if trt == 0 and exp(5) if trt == 1.
+count <- rpois(n = 200, lambda = exp(3 + 2*trt))
+
+# rate is count/exposure 
+rate_data <- data.frame(count, trt, exposure, 
+                        rate = count/exposure)
+head(rate_data)
+
+```
+
+
+Notice the counts for observations 2 and 5 are similar, but the exposures, and thus the rates, are very different.
+ 
+To model this data appropriately we should include the exposure. To do this we log transform the "exposure" and use either the offset argument or include in the model formula using the `offset` function
+
+```{r}
+rate.mod1 <- glm(count ~ trt, offset = log(exposure), 
+                 data = rate_data, family = poisson)
+# same thing
+rate.mod2 <- glm(count ~ trt + offset(log(exposure)), 
+                 data = rate_data, family = poisson)
+
+# check that coefficients are equal
+all.equal(rate.mod1$coefficients, rate.mod2$coefficients)
+```
+
+
+The interpretation is in terms of the _rate_ rather than the mean
+
+```{r}
+summary(rate.mod1)
+```
+
+Notice the intercept is nowhere close to the true value of 3. It is the estimated _rate_ when all other explanatory variables are set to 0. In this case that's the estimated rate when trt = 0.
+
+```{r}
+exp(coef(rate.mod1)["(Intercept)"])
+```
+
+
+The estimated rate when trt = 1 is exp(1.927) = 6.9 times that of the rate when trt = 0.
+
+```{r}
+exp(coef(rate.mod1)["trt"])
+```
+
+The estimated rate when trt = 1 is exp(-6.19872 + 1.92684)
+
+```{r}
+exp(sum(coef(rate.mod1)))
+```
+
+To use the model to make predictions, we need to include an exposure. Below we get predicted values for the two levels of trt with exposure set to 10,000. (Notice we don't need to log transform the exposure.) The default prediction type is "link". In this case the link is the log transform. Notice the result closely matches the "true" values we used to simulate the data. 
+
+```{r}
+predict(rate.mod1, type = "link",
+        newdata = data.frame(trt = c(0,1), exposure = c(10000, 10000)))
+```
+
+To get the predicted values as _counts_, we need to specify the type as "response". Below we get _predicted counts per 10,000_.
+
+```{r}
+predict(rate.mod1, type = "response",
+        newdata = data.frame(trt = c(0,1), exposure = c(10000, 10000)))
+```
+
+To get the predicted values as _rates_, we need to specify the type as
+"response" and divide by the exposure.
+
+```{r}
+p <- predict(rate.mod1, type = "response",
+        newdata = data.frame(trt = c(0,1), exposure = c(10000, 10000)))
+data.frame(p, rate = p/10000)
+
+```
+
+It doesn't matter what exposure you pick, the rate will be the same:
+
+```{r}
+p <- predict(rate.mod1, type = "response",
+             newdata = data.frame(trt = c(0,1), exposure = c(12345, 12345)))
+data.frame(p, rate = p/12345)
+
+```
+
+Notice the rates match what we got above by exponentiating the coefficients.
+
+We can create effect plots using the ggeffects package, but there are some modifications we need to make to plot rates:
+
+- need to use ggeffect() instead of ggpredict().
+- ggeffects expects the model to have been fit with the offset argument
+ specified (as opposed to being included in the model formula)
+- We need to add rates to the data frame created by ggeffect()
+
+The following plots the expected counts per 10,000, not the incidence rates
+
+```{r}
+eff_out <- ggeffect(rate.mod1, terms = "trt", offset = log(10000))
+plot(eff_out)
+
+```
+
+
+Notice the fit is a line that treats trt as if it's a continuous number. Let's refit the model with trt as a factor.
+ 
+```{r}
+rate_data$trtF <- factor(rate_data$trt)
+rate.mod <- glm(count ~ trtF, offset = log(exposure), 
+                 data = rate_data, family = poisson)
+eff_out <- ggeffect(rate.mod, terms = "trtF", offset = log(10000))
+plot(eff_out)
+
+```
+ 
+
+To plot expected rates, we need to divide the fit and CI lower and upper bounds by 10,000. We do this below with mutate_at
+
+
+```{r}
+vars <- c("predicted", "conf.low", "conf.high")
+eff_out[vars] <- eff_out[vars]/1000
+```
+
+
+Once we do that, we have to create the plot ourselves:
+
+```{r}
+library(ggplot2)
+ggplot(eff_out, aes(x, predicted)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.05)
+
+```
+
+Instead of per 10,000, we could do per 1,000, but notice the plot does not change:
+
+```{r}
+eff_out2 <- ggeffect(rate.mod, terms = "trtF", offset = log(1000))
+eff_out2[vars] <- eff_out2[vars]/1000
+ggplot(eff_out2, aes(x, predicted)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1)
+
+```
+
+Changing the exposure _modifies expected counts but not expected rates_.
+
+
+
+## Appendix: Hurdle models
+
+Another type of model for excess zeroes is the hurdle model. In this case we assume there is one and only one process for the zeroes, and a separate process for counts greater than 0.
+
+Example: number of cigarettes smoked in one week. 
+
+- Zero counts are non-smokers
+- non-zero counts are smokers (ie, zero truncated)
+
+We can simulate data as before using the `rztpois()` function from the countreg package, which simulates data from a zero-truncated poisson distribution.
+
+two means: 0.9 when trt = 0; 2.4 when trt = 1
+
+```{r}
+trt <- rep(0:1, each = 300)
+mu <- 0.9 + 1.5*trt 
+set.seed(20)
+zi <- rbinom(600, size = 1, prob = 0.4) # ~60% zeroes
+```
+
+Now simulate counts conditional on our draws from the binomial distribution. If it's a 0, keep it. Otherwise take the result from a zero-truncated Poisson distribution with mean = exp(0.9 + 1.5*trt). NOTE: we could also use the negative binomial distribution
+
+```{r}
+y <- ifelse(zi == 0, 0, rztpois(600, mean=exp(mu)))  
+dat <- data.frame(y, trt)
+plot(table(dat$y))
+```
+
+Fit a model to our data that does not accommodate excess zeroes
+
+```{r}
+mod1 <- glm(y ~ trt, data = dat, family = poisson)
+summary(mod1)
+countreg::rootogram(mod1)
+```
+
+
+Fit a model that accommodates excess zeroes using the `hurdle()` function from the pscl package. This fits two models, separated by the |
+
+1. a zero-truncated Poisson count model: y ~ trt
+2. a binomial model: 1 (intercept only model)
+
+```{r}
+mod2 <- pscl::hurdle(y ~ trt | 1, data = dat, dist = "poisson")
+summary(mod2)
+```
+
+
+```{r}
+countreg::rootogram(mod2)
+```
+
+Use the `plogis()` function to take the inverse logit of the binomial model coefficient to get the estimated probability of clearing the "hurdle" (ie, having a count greater than 0)
+
+```{r}
+plogis(coef(mod2)["zero_(Intercept)"])
+```
+
+In this case, this is simply the proportion of counts NOT 0
+
+```{r}
+mean(dat$y != 0)
+```
+
+The binomial part of the hurdle model is the "Hurdle" to clear before the count model process kicks in. In this simple model, we might say we estimate about 40% of the subjects to clear the hurdle, which is what we specified when we generated the data.
+
+## Appendix: rootograms "by hand" 
+
+Recall this model and associate rootogram.
+
+```{r}
+phd.pois <- glm(articles ~ female + mentor, 
+                data = PhdPubs, 
+                family = poisson)
+rootogram(phd.pois)
+```
+
+
+Here's how we can make the rootogram "by hand"
+
+Get expected mean count at each observation. The model returns the predicted mean count at each observation.
+
+```{r}
+mu <- predict(phd.pois, type = "response")
+```
+
+Next we create an empty matrix. Using the expected mean count for each observation, we calculate the probability of a 0 count, a 1 count, 2 count, etc all the way to a 9 count. The `dpois()` function returns the expected probability of a count for a given mean (lambda).
+
+```{r}
+p <- matrix(NA, nrow = length(mu), ncol = length(0:9))
+for (i in 0:9) p[, i + 1L] <- dpois(i, lambda = mu)
+```
+
+
+Then we sum the columns (the probabilities) to get an expected count of 0, 1,...9. We also take the square root to put all the expected counts on a similar scale.
+
+```{r}
+expctd <- sqrt(colSums(p))
+expctd
+```
+
+
+Now get the observed counts and take the square root
+
+```{r}
+obs <- sqrt(as.vector(table(PhdPubs$articles)[1:10]))
+```
+
+Put everything into a data frame including the difference between expected and observed counts. This is our data frame to create the rootogram.
+
+```{r}
+d <- data.frame(count = 0:9,
+                obs,
+                expctd,
+                diff = expctd - obs)
+```
+
+
+Make the rootogram. It's a little different than the one produced by `rootogram()` but it works.
+
+```{r}
+ggplot(d) +
+  geom_segment(aes(x = count, y = diff, 
+                   xend = count, yend = expctd),
+               linewidth = 6, alpha = 1/4) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_point(aes(x = count, y = expctd), col = "red") +
+  geom_line(aes(x = count, y = expctd), col = "red") +
+  scale_x_continuous(breaks = 0:9, minor_breaks = NULL)
+
+```
+
+## Appendix: glm residuals 
+
+How response, pearson and deviance residuals are calculated.
+
+```{r}
+# obs 1
+head(PhdPubs[,c("articles", "female", "mentor")], n = 1)
+```
+
+obs 1 is a male (female=0) and has 7 mentors, so they're predicted value is calculated as follows.
+
+```{r}
+beta <- coef(phd.pois)
+mu_hat <- exp(beta[1] + beta[2]*0 + beta[3]*7)
+obs <- PhdPubs$articles[1]
+```
+
+Response residual for obs 1
+
+```{r}
+residuals(phd.pois, type = "response")[1]
+```
+
+```{r}
+obs - mu_hat
+```
+
+pearson residual for obs 1
+
+```{r}
+residuals(phd.pois, type = "pearson")[1]
+```
+
+```{r}
+(obs - mu_hat)/sqrt(mu_hat)
+
+```
+
+deviance residual for obs 1
+
+```{r}
+residuals(phd.pois, type = "deviance")[1]
+```
+
+```{r}
+sign(obs - mu_hat) * sqrt(2*(obs * log(mu_hat) - (obs - mu_hat)))
+
+```
+
+
+
 
 
