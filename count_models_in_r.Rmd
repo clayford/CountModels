@@ -1181,8 +1181,17 @@ Changing the exposure _modifies expected counts but not expected rates_.
 
 ## Wrap-up
 
+This was meant to show you the basics of count modeling in R. Hopefully you have a better grasp of how count modeling works. Scroll down for a few more topics.
 
+What we did today works for _independent counts_. Things get more complicated when we have _multiple measures_ on the same subject or _clusters_ of related subjects or observations. In that case we usually use mixed-effect or longitudinal count models. 
 
+Two packages to be aware of are lme4 and glmmTMB.
+
+- Multilevel/mixed-effect poisson models: `lmer4::glmer()`
+- Multilevel/mixed-effect negative-binomial models: `lme4::glmer.nb()`
+- Multilevel/mixed-effect zero-inflated models: `glmmTMB::glmmTMB()`
+
+It's also not unheard of to just use linear models for counts. Sometimes they work just as well and can be easier to explain.
 
 ## Appendix: Hurdle models
 
