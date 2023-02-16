@@ -33,6 +33,17 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 Insert a new R code chunk below and type and run the code: Sys.time()
 
 
+## Agenda
+
+- linear model review
+- distributions for counts: Poisson and Negative Binomial
+- fitting/interpreting Poisson and Negative Binomial count models
+- evaluate count models with rootograms
+- fitting zero-inflated models
+- using effect plots to visualize models
+- fitting rate models
+
+
 ## Packages
 
 Let's load some packages we're going to use today.
@@ -81,8 +92,8 @@ plot(x, y)
 
 This data is the combination of two parts:
 
-1. 10 + 5*x
-2. rnorm(n = 25, mean = 0, sd = 10)
+1. fixed: 10 + 5*x
+2. random: rnorm(n = 25, mean = 0, sd = 10)
 
 We could also combine the two parts in a single call to `rnorm()` where we enter `10 + 5*x` as the mean. In other words, randomly generate Normal data with a _conditional mean_.
 
@@ -109,8 +120,7 @@ Traditional linear modeling assumes the following:
 2. the noise is a random draw from a Normal distribution with mean = 0
 3. the standard deviation of the Normal distribution is constant
 
-Linear modeling tries to recover the weights (or coefficients) in the first
-assumption (10 and 5) and the standard deviation in the 3rd assumption (10).
+Linear modeling tries to recover the weights (or coefficients) in the first assumption (10 and 5) and the standard deviation in the 3rd assumption (10).
 
 To do this we can use lm(). The syntax "y ~ x" means we think Part 1 of the model is "y = intercept + slope*x". We usually save the model into an object. Below I save it to "mod".
 
@@ -121,47 +131,44 @@ summary(mod)
 
 The model returns the following estimates:
 
-- intercept = 11.135
-- slope = 5.042
-- sd = 9.7 (Residual standard error)
+- rnorm(n = 25, mean = 11.135 + 5.042*x, sd = 9.7)
 
-We can use our model to generate data and see if it looks similar to our original data.
+This is close to the "true" values we used to generate the data:
 
-```{r}
-y_sim <- simulate(mod, nsim = 20)
-plot(density(y))
-for(i in 1:20)lines(density(y_sim[[i]]), col = "grey80")
+- rnorm(n = 25, mean = 10 + 5*x, sd = 10)
 
-```
-
-Hence this is linear modeling:
-
-1. propose and fit model(s)
-2. determine if the model is good
-3. use the model to explain relationships or make predictions
+This is because we fit the correct model. We simulated the data, so we knew which model to fit. This doesn't happen in real life.
 
 Today we look at _count models_ where we relax the assumptions that each response value is drawn from a Normal distribution with constant variance.
 
 ## Distributions for counts
 
+Let's review two common distributions for count data. Count data are integers greater than or equal to 0. These are discrete values we would use to record counts of events. 
+
 ### Poisson distribution
 
-Use the `rpois()` function to generate random data from a Poisson distribution with a specified mean. Notice the data are positive integers greater than or equal to 0.
+The Poisson distribution is a discrete probability distribution with one parameter: lambda.
 
 lambda is the mean; the variance and mean are equal in Poisson distributions.
 
-Sample data from a Poisson distribution with a mean of 3. Note that lambda can take decimal values.
+Let's explore the Poisson distribution via simulation. We can use the `rpois()` function to generate random data with a specified lambda (mean). Notice the data are positive integers greater than or equal to 0.
+
+Sample data from a Poisson distribution with a lambda of 3. Note that lambda can take decimal values.
 
 ```{r}
 set.seed(1)
 y1 <- rpois(n = 1000, lambda = 3)
-# counts of the distinct values
-table(y1)
+head(y1)
+```
 
+Create table of the counts of distinct values. Top row is the count, bottom row is the number of occurrences.
+
+```{r}
+table(y1)
 ```
 
 
-visual of the distribution of counts
+Visualize distribution of counts
 
 ```{r}
 table(y1) |> plot()
@@ -184,20 +191,28 @@ c(mean(y1), var(y1))
 
 ### Negative binomial distribution
 
-We can use the `rnbinom()` function to generate random data from a negative binomial distribution with a specified mean and dispersion parameter (theta).
+The Negative binomial distribution is also a discrete probability distribution, but with two parameters: mu (mean) and theta (a dispersion parameter)
 
-mu is the mean. The size argument is the dispersion parameter (theta). The negative binomial allows the _variance to be greater than the mean_.
+mu is the mean. Theta is a dispersion parameter that allows the _variance to be greater than the mean_.
 
-Var = mu + mu^2/theta
+Variance = mu + mu^2/theta
+
+This can be useful when the assumption of count data having equal mean and variance is too restrictive or unrealistic.
+
+Let's explore the negative binomial distribution via simulation. We can use the `rnbinom()` function to generate random data with a specified mean (`mu`) and dispersion parameter (`size`).
 
 Let's sample data from a negative binomial distribution with a mean = 3 and theta = 2. Notice the data are positive integers greater than or equal to 0.
 
 ```{r}
 set.seed(2)
 y2 <- rnbinom(n = 1000, mu = 3, size = 2)
-# counts of the distinct values
-table(y2)
+head(y2)
+```
 
+Create table of the counts of distinct values. Top row is the count, bottom row is the number of occurrences.
+
+```{r}
+table(y2)
 ```
 
 Visualize the distribution of counts
@@ -212,13 +227,13 @@ Visualize the proportion of counts:
 table(y2) |> proportions() |> plot()
 ```
 
-The mean and variance are not equal. The variance is larger
+The mean and variance are not equal. The variance is larger.
 
 ```{r}
 c(mean(y2), var(y2)) 
 ```
 
-As theta gets big, the negative binomial converges to a Poisson distribution. Notice in the randomly generated data below with a huge theta that the estimated mean and variance are about equal, like a Poisson distribution.
+As theta gets big, the negative binomial converges to a Poisson distribution. Notice in the randomly generated data below with a huge theta (2000) that the estimated mean and variance are about equal, like a Poisson distribution.
 
 ```{r}
 y3 <- rnbinom(n = 1000, mu = 3, size = 2000)
@@ -226,12 +241,11 @@ c(mean(y3), var(y3))
 ```
 
 
-
 ## Simulating count data with conditional mean
 
 Above we plugged in a single mean. But perhaps the mean depends on some other variable(s). Perhaps the mean is lower for an "untreated" group than the mean for a "treated" group.
 
-Let's simulate a bunch of 0s and 1s to indicate untreated and treated
+Let's simulate a bunch of 0s and 1s to indicate untreated (0) and treated (1)
 
 ```{r}
 set.seed(11)
@@ -246,9 +260,9 @@ y1 <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))
 ```
 
 
-Why use exp()? That ensures we get a positive mean. Lambda has to be positive. Here it's not necessary but as we'll see this transformation is built into count models.
+Why use `exp()`? That ensures we get a positive mean. Lambda has to be positive. Here it's not necessary but as we'll see this transformation is built into count models.
 
-expected count when trt = 0
+Expected count when trt = 0
 
 ```{r}
 exp(1.2) # about 3
@@ -263,7 +277,7 @@ exp(1.2 + 1.8) # about 20
 Plot of y1 distribution. Notice the two distinct humps for each group.
 
 ```{r}
-table(y1) %>% plot()
+table(y1) |> plot()
 ```
 
 Let's do the same for a negative binomial distribution
@@ -273,7 +287,7 @@ Randomly sample from a negative binomial distribution with a mean of `exp(1.2 + 
 ```{r}
 set.seed(33)
 y2 <- rnbinom(n = 1000, mu = exp(1.2 + 1.8*trt), size = 10)
-table(y2) %>% plot()
+table(y2) |> plot()
 ```
 
 ## Count modeling with simulated data
@@ -287,11 +301,21 @@ How to recover those "true" values? This is essentially count modeling.
 
 We use the `glm()` function to fit a poisson count model. Use the same way as `lm()`, but include the family argument: `family = poisson` 
 
-The `link = "log"` argument is assumed by default but is included here for completeness.
+The `link = "log"` argument is assumed by default but is included here for completeness. Why "log"? Because it's the _link_ to the additive model. Recall that taking the log of an exponentiated value returns the original value.
+
+```{r}
+log(exp(3))
+```
+
+Likewise...
+
+```
+log(exp(1.2 + 1.8*trt)) = 1.2 + 1.8*trt
+```
 
 Let's fit a model to our simulated data. We generated the data so we know the correct model to specify!
 
-Th "correct" model:
+The "correct" model:
 `y1 <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))`
 
 `y1 ~ trt` is shorthand for "y1 = (Intercept) + slope*trt"
@@ -333,17 +357,16 @@ Exponentiating the slope coefficient tells us the _multiplicative effect_ of trt
 coef(m1)["trt"] |> exp()
 ```
 
-Again, the expected count of y when trt = 1 is about 6.1 times the expected count when trt = 0.
+Multiplying the exponentiated intercept (ie, the expected count when trt == 0) by 6.135355 returns the expected count for trt == 1
 
 ```{r}
-exp(coef(m1)["(Intercept)"]) * 6.109849
+exp(coef(m1)["(Intercept)"]) * 6.135355 
 ```
 
 This is precisely the expected count we calculated above.
 
 ```{r}
-sum(coef(m1)) %>% exp()
-
+sum(coef(m1)) |> exp()
 ```
 
 Let's use our model to simulate some data and see if it looks similar to our observed data set.
@@ -357,27 +380,24 @@ plot(table(sim_y1), main = "model simulated")
 ```
 
 
-We could also plot smooth density curves that approximate the distribution, though some may argue this is not appropriate for discrete data. 
-
-```{r}
-sim_y1 <- simulate(m1, nsim = 50)
-plot(density(y1, from = 0))
-for(i in 1:50)lines(density(sim_y1[[i]], from = 0), 
-                    col = "grey80", lty = 3)
-```
-
 ### Fitting a Negative binomial count model
 
-We use the `glm.nb()` function from the MASS package to fit a negative binomial model. No need to specify the family argument. The `link = log` argument is assumed by default but is included here for completeness.
+We use the `glm.nb()` function from the MASS package to fit a negative binomial model. No need to specify the family argument. The `link = "log"` argument is assumed by default but is included here for completeness.
 
 Let's fit a model to our simulated data. We generated the data so we know the correct model to specify!
 
 `y2 <- rnbinom(n = 1000, mu = exp(1.2 + 1.8*trt), size = 10)`
 
+In addition to the coefficients for the additive model, `glm.nb()` will estimate theta.
+
 ```{r}
-m2 <- glm.nb(y2 ~ trt, link = log)
+m2 <- glm.nb(y2 ~ trt, link = "log")
 summary(m2)
 ```
+
+Notice the phrase: "(Dispersion parameter for Negative Binomial(9.8611) family taken to be 1)"
+
+This is confusing because "Dispersion parameter" in this sentence refers to the GLM dispersion parameter (phi), which is different from the negative binomial dispersion parameter (theta)! The GLM dispersion parameter gets estimated when we fit models with `family = quasipoisson(link = "log")`. (See Appendix: Modeling with quasipoisson)
 
 We can extract theta from the model object if needed:
 
@@ -391,7 +411,7 @@ And we can use `coef()` to extract the coefficients.
 coef(m2)
 ```
 
-Again, the coefficients are very close to the "true" values of 1.2, 1.8 and 1.2
+Again, the coefficients are very close to the "true" values of 1.2, 1.8 and 10.
 
 And again we need to use `exp()` to get our expected counts on the original scale, which is expected counts.
 
@@ -413,7 +433,7 @@ The multiplicative effect of trt==1 is about 5.9.
 coef(m2)["trt"] |> exp()
 ```
 
-Let's use our model to simulate some data and see if it looks similar to our oberved data set.
+Let's use our model to simulate some data and see if it looks similar to our observed data set.
 
 ```{r}
 sim_y2 <- rnbinom(n = 1000, mu = exp(coef(m2)[1] + coef(m2)[2]*trt), 
@@ -424,14 +444,6 @@ plot(table(sim_y2), main = "model simulated")
 
 ```
 
-We could also plot smooth density curves that approximate the distribution
-
-```{r}
-sim_y2 <- simulate(m2, nsim = 50)
-plot(density(y2, from = 0))
-for(i in 1:50)lines(density(sim_y2[[i]], from = 0), 
-                    col = "grey80", lty = 3)
-```
 
 ## CODE ALONG 1
 
@@ -490,7 +502,7 @@ sum(residuals(null_m1, type = "deviance")^2)
 
 Three things to remember about deviance...
 
-1. Deviance is a measure of error, lower means better
+1. Deviance is a measure of error; we would like the Residual deviance to be much lower than the Null deviance.
 2. If a predictor is just noise and has no explanatory power, we expect deviance to decrease by 1 on average.
 3. When a useful predictor is added to a model, we expect deviance to decrease by more than 1.
 
@@ -502,7 +514,7 @@ Let's load some real data to explore and model. A data set giving the number of 
 
 Source: "Discrete Data Analysis with R" by Michael Friendly and David Meyer.
 
-Of interest is if the count of articles can be modeled as a function of the other variables. We don't know the "true" model or whether or not these variables have anything to do with the count of articles.
+Of interest is if the count of published articles can be modeled as a function of the other variables. We don't know the "true" model or whether or not these variables have anything to do with the count of articles.
 
 ```{r}
 data("PhdPubs", package = "vcdExtra")
@@ -535,7 +547,7 @@ plot(table(PhdPubs$articles))
 
 The number of published articles has quite a bit of variability. Do the other variables perhaps "explain" some of the variability?
 
-Let's fit a Poisson model using female and mentor. 
+Let's fit a Poisson model using female and mentor as predictors. 
 
 ```{r}
 phd.pois <- glm(articles ~ female + mentor, 
@@ -543,6 +555,8 @@ phd.pois <- glm(articles ~ female + mentor,
                 family = poisson)
 summary(phd.pois)
 ```
+
+The Residual deviance is much lower than the Null deviance, suggesting the female and mentor variables help explain some of the variability in article count and are at least better than simply taking the mean (ie, the null intercept-only model).
 
 Naive interpretation of coefficients.
 
@@ -556,18 +570,19 @@ coef(phd.pois)
 If we exponentiate, we get the multiplicative effect (holding other predictors constant.)
 
 ```{r}
-exp(coef(phd.pois))
+coef(phd.pois) |> exp()
 
 ```
 
+The expected number of publications for female candidates is about 0.83 times that of male candidates, or about a 17% decrease
 
-If we exponentiate, multiply by 100 and subtract 1, we get the percent increase or decrease.
+Each additional mentor publication increases expected count of published articles by a factor of about 1.025, or about 2.5%.
+
+Once we exponentiate, we can multiply by 100 and subtract 1 to get the percent increase or decrease.
 
 ```{r}
 100 * (exp(coef(phd.pois)) - 1)
-
 ```
-
 
 All together in a matrix using cbind(), rounded to 3 decimal places
 
@@ -580,16 +595,10 @@ round(
 
 ```
 
-The expected number of publications for female candidates is about 0.83 times that of male candidates, or about a 17% decrease
-
-Each additional mentor publication increases expected count of published articles by a factor of about 1.025, or about 2.5%.
-
-Using both predictors seem to be better than using just an intercept according to the null and residual deviance.
-
 
 ### Confidence intervals
 
-Confidence intervals give us a sense of how certain these estimated effects are. Since we exponentiate, overlapping 1 (instead of 0) indicates an uncertain direction in magnitude.
+Confidence intervals give us a sense of how certain these estimated effects are. Since we exponentiate and get a multiplicative effect, overlapping 1 (instead of 0) indicates an uncertain direction in magnitude.
 
 ```{r}
 exp(confint(phd.pois))
@@ -657,9 +666,9 @@ countreg::rootogram(phd.pois2)
 
 The red dots and connector lines visualize the model's expected number of articles.
 
-The length of the bars are the _observed counts_. Notice the counts have been transformed with a square root transformation. That's to help smaller counts not get squashed by larger counts.
+The length of the bars are the _observed counts_. Notice the counts have been transformed with a square root transformation. That's to help smaller numbers of counts not get squashed by larger numbers of counts.
 
-Bars that dip below 0 are underfit; bars that hang above 0 are overfit.
+Bars that dip below 0 are _underfit_; bars that hang above 0 are _overfit_.
 
 We can use the max argument to increase or decrease the count displayed
 
@@ -670,7 +679,7 @@ countreg::rootogram(phd.pois, max = 15)
 
 There are two other styles available: standing and suspended
 
-The standing version basically plots the model predicted counts over the oberserved counts.
+The standing version plots the model predicted counts (red line) over the observed counts (bars).
 
 ```{r}
 countreg::rootogram(phd.pois2, style = "standing")
@@ -682,14 +691,13 @@ The suspended version uses less ink and shows just the under and over-fit counts
 countreg::rootogram(phd.pois2, style = "suspended")
 ```
 
-ggplot2 version
+If preferred, we can request a ggplot2 version
 
 ```{r}
 autoplot(rootogram(phd.pois2))
 ```
 
-This is an ok not great fitting model. We are underfitting 0 counts, overfitting
-1, 2, and 3 counts, then underfitting counts 4 - 7.
+This is an ok not great fitting model. We are underfitting 0 counts, overfitting 1, 2, and 3 counts, then underfitting counts 4 - 7.
 
 Recall our earlier toy model for which we fit the "correct" model. Notice we're not consistently over or underfitting counts. The counts seem to vary around 0 randomly.
 
@@ -726,12 +734,14 @@ c(mean(PhdPubs$articles),
 
 The AER package provides a formal test of overdispersion with the `dispersiontest()` function. The null is the mean and variance are equal. Rejecting the null with a small p-value provides evidence of overdispersion.
 
+Let's fit a new Poisson model with more predictors.
+
 ```{r}
 phd.pois3 <- glm(articles ~ female + mentor + kid5 + married + phdprestige,
                  data = PhdPubs, family = poisson)
 ```
 
-The first argument is a fitted Poisson model.
+Now test for overdispersion using the dispersiontest() function.
 
 ```{r}
 AER::dispersiontest(phd.pois3)
@@ -739,20 +749,17 @@ AER::dispersiontest(phd.pois3)
 
 The super small p-value suggests we probably have overdispersion and that a Poisson model may not be suitable, which is also what we saw with the rootogram. In this case a negative binomial model may be more suitable since it accommodates overdispersion.
  
-The glm.nb function in the MASS package fits a negative binomial model
+The `glm.nb()` function in the MASS package fits a negative binomial model. The syntax `articles ~ .` models articles as a function of all other columns in the PhdPubs data frame.
 
 ```{r}
 phd.nb <- glm.nb(articles ~ ., data = PhdPubs)
 summary(phd.nb)
 ```
 
-
 The interpretation of the coefficients is the same as a Poisson model.
 
 ```{r}
-
 exp(coef(phd.nb))
-
 ```
  
 Is this model better than the Poisson model? We can asses this question using the AIC/BIC information criteria. Models with lower values are preferred.
@@ -765,6 +772,7 @@ AIC(phd.pois3, phd.nb)
 BIC(phd.pois3, phd.nb)
 ```
 
+It certainly seems like the negative binomial model is better than a Poisson model.
 
 A rootogram allows us to asses how well the model fits the observed data.
 
@@ -778,7 +786,7 @@ This certainly seems to fit much better.
 
 It's not unusual for real life count data to have more zeroes than would be expected of a Poisson or negative binomial model. When this happens we say we have "zero inflation".
 
-A common approach to modeling such data is to create a mixture of two models to account for the extra zeroes:
+A common approach to modeling such data is to create a mixture of two models to account for the _extra zeroes_:
 
 1. a model for the occurrence of zeroes
 2. a model for the counts, which can also include zeroes
@@ -788,7 +796,7 @@ Example: survey random sample of UVA students and ask how many alcoholic drinks 
 - Some don't drink, always zero
 - Some do drink but perhaps didn't drink that weekend, second source of zeroes
 
-Let's simulate data with these qualities.
+Let's simulate some toy data with these qualities.
 
 To begin we'll simulate zeroes and ones using `rbinom()` which allows us to randomly sample from a binomial distribution. A binomial distribution has two parameters: 
 
@@ -837,7 +845,7 @@ countreg::rootogram(mod1)
 
 Underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
  
-Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function from the pscl package. This fits two models, separated by the |
+Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function from the pscl package. This fits two models, separated by a `|`
 
 1. a Poisson count model: y ~ trt
 2. a binomial model: 1 (intercept only model)
@@ -991,7 +999,7 @@ plot(mentor_eff)
 
 ### Non-linear effect example
 
-A common approach to modeling non-linear effects is to use a flexible cubic spline. Below we model the count of articles as function of mentor with a 3 degree of freedom natual cubic spline. The 3 degrees of freedom says we think the trajectory of the count could potentially change 3 times as mentor increases. One way to think of splines is as a more sophisticated version of polynomials (eg, x + x^2 + x^3).
+A common approach to modeling non-linear effects is to use a flexible cubic spline. Below we model the count of articles as function of mentor with a 3 degree of freedom natural cubic spline. The 3 degrees of freedom says we think the trajectory of the count could potentially change 3 times as mentor increases. One way to think of splines is as a more sophisticated version of polynomials (eg, x + x^2 + x^3).
 
 Below we load the splines package that comes with R and use the `ns()` function to create what is called a "spline basis". This basically transforms the single mentor variable into three separate variables to allow for a non-linear relationship. Notice the output is impossible to interpret other than to conclude that the non-linear effects may be justified.
 
@@ -1045,7 +1053,7 @@ head(rate_data)
 
 Notice the counts for observations 2 and 5 are similar, but the exposures, and thus the rates, are very different.
  
-To model this data appropriately we should include the exposure. To do this we log transform the "exposure" and use either the offset argument or include in the model formula using the `offset` function
+To model this data appropriately we should _include the exposure_. To do this we log transform the "exposure" and use either the offset argument or include in the model formula using the `offset()` function
 
 ```{r}
 rate.mod1 <- glm(count ~ trt, offset = log(exposure), 
@@ -1065,7 +1073,7 @@ The interpretation is in terms of the _rate_ rather than the mean
 summary(rate.mod1)
 ```
 
-Notice the intercept is nowhere close to the true value of 3. It is the estimated _rate_ when all other explanatory variables are set to 0. In this case that's the estimated rate when trt = 0.
+Notice the intercept is nowhere close to the true value of 3. It is the estimated _rate_ when when trt = 0.
 
 ```{r}
 exp(coef(rate.mod1)["(Intercept)"])
@@ -1147,7 +1155,7 @@ plot(eff_out)
 ```
  
 
-To plot expected rates, we need to divide the fit and CI lower and upper bounds by 10,000. We do this below with mutate_at
+To plot expected rates, we need to divide the fit and CI lower and upper bounds by 10,000. 
 
 
 ```{r}
@@ -1173,7 +1181,7 @@ eff_out2 <- ggeffect(rate.mod, terms = "trtF", offset = log(1000))
 eff_out2[vars] <- eff_out2[vars]/1000
 ggplot(eff_out2, aes(x, predicted)) +
   geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1)
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.05)
 
 ```
 
@@ -1192,6 +1200,20 @@ Two packages to be aware of are lme4 and glmmTMB.
 - Multilevel/mixed-effect zero-inflated models: `glmmTMB::glmmTMB()`
 
 It's also not unheard of to just use linear models for counts. Sometimes they work just as well and can be easier to explain.
+
+## References
+
+Regression Models for Count Data in R   
+Achim Zeileis, Christian Kleiber, Simon Jackman    
+https://www.jstatsoft.org/article/view/v027i08  
+Journal of Statistical Software, Vol 27 (2008) Issue 8   
+
+Visualizing Count Data Regressions Using Rootograms  
+Christian Kleiber, Achim Zeileis  
+https://arxiv.org/pdf/1605.01311.pdf    
+The American Statistician, Vol 70 (2016) Issue 3   
+
+
 
 ## Appendix: Hurdle models
 
@@ -1375,6 +1397,61 @@ sign(obs - mu_hat) * sqrt(2*(obs * log(mu_hat) - (obs - mu_hat)))
 ```
 
 
+## Appendix: Modeling with quasipoisson
 
+Another approach to handling overdispersion is to use quasi-likelihood models. This estimates a _GLM dispersion parameter_ that is used to increase the standard errors of the coefficients. 
 
+Below we fit two models:  
 
+1. Poisson model
+2. Quasipoisson model
+
+In the second model we set `family = quasipoisson(link = "log")`. This results in a GLM dispersion parameter being estimated. Notice the model coefficients are the same as those estimated from a Poisson model.
+
+```{r}
+# regular Poisson model
+phd.pois <- glm(articles ~ female + mentor, 
+                data = PhdPubs, 
+                family = poisson)
+# Quasi-Poisson model
+phd.qpois <- glm(articles ~ female + mentor, 
+                data = PhdPubs, 
+                family = quasipoisson(link = "log"))
+# coefficients are the same
+cbind("poisson" = coef(phd.pois), "quasipoisson" = coef(phd.qpois))
+```
+
+However the standard errors are different. The quasipoisson model has bigger standard errors. They've been inflated by the dispersion parameter.
+
+```{r}
+cbind("poisson" = coef(summary(phd.pois))[,"Std. Error"],
+      "quasi-poisson" = coef(summary(phd.qpois))[,"Std. Error"])
+```
+
+Notice the sentence in the summary output of the quasipoisson model: "(Dispersion parameter for quasipoisson family taken to be 1.851488)"
+
+```{r}
+summary(phd.qpois)
+```
+
+That's the value used to adjust the standard errors. The standard errors from the regular poisson model are multiplied by this value.
+
+The dispersion parameter is 1.851488. If we multiply the variance of the regular Poisson coefficients by this value and take the square root, we get the quasi-poisson standard errors.
+
+```{r}
+sqrt(coef(summary(phd.pois))[,"Std. Error"]^2 * 1.851488)
+```
+
+Notice this matches the quasi-poisson standard errors
+
+```{r}
+coef(summary(phd.qpois))[,"Std. Error"]
+```
+
+The dispersion parameter is estimated by taking the sum of the squared Pearson residuals and dividing by the residual degrees of freedom. (there's a bit of rounding error here when we do it by hand)
+
+```{r}
+sum(residuals(phd.pois, type = "pearson")^2)/phd.pois$df.residual
+```
+
+Notice also the summary output for the quasipoisson model does not return an AIC estimate. That's because have a quasi-likelihood, not a true likelihood. This is one reason why negative binomial models are usually preferred to model overdispersion in count models. 
