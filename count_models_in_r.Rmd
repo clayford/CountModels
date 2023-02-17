@@ -36,13 +36,15 @@ Insert a new R code chunk below and type and run the code: Sys.time()
 ## Agenda
 
 - linear model review
-- distributions for counts: Poisson and Negative Binomial
+- explore distributions for counts: Poisson and Negative Binomial
 - fitting/interpreting Poisson and Negative Binomial count models
 - evaluate count models with rootograms
 - fitting zero-inflated models
 - using effect plots to visualize models
-- fitting rate models
 
+Appendix Topics (ie, topics cut for time)
+- rate models
+- hurdle models
 
 ## Packages
 
@@ -92,8 +94,8 @@ plot(x, y)
 
 This data is the combination of two parts:
 
-1. fixed: 10 + 5*x
-2. random: rnorm(n = 25, mean = 0, sd = 10)
+1. _fixed_: 10 + 5*x
+2. _random_: rnorm(n = 25, mean = 0, sd = 10)
 
 We could also combine the two parts in a single call to `rnorm()` where we enter `10 + 5*x` as the mean. In other words, randomly generate Normal data with a _conditional mean_.
 
@@ -120,9 +122,9 @@ Traditional linear modeling assumes the following:
 2. the noise is a random draw from a Normal distribution with mean = 0
 3. the standard deviation of the Normal distribution is constant
 
-Linear modeling tries to recover the weights (or coefficients) in the first assumption (10 and 5) and the standard deviation in the 3rd assumption (10).
+Linear modeling tries to recover the weights (or coefficients) in the first assumption (10, 5, 3) and the standard deviation in the 3rd assumption (10).
 
-To do this we can use `lm()`. The syntax "y ~ x" means we think Part 1 of the model is "y = intercept + slope*x". We usually save the model into an object. Below I save it to "mod".
+To do this we can use `lm()`. The syntax "y ~ x" means we think the model is "y = intercept + slope*x". We usually save the model into an object. Below I save it to "mod".
 
 ```{r}
 mod <- lm(y ~ x)
@@ -155,11 +157,11 @@ ggpredict(mod, terms = "x") |> plot(add.data = TRUE)
 ```
 
 
-Today we look at _count models_ where we model integers greater than or equal to 0 and assume a different distribution for the random error (ie, not a Normal distribution).
+Today we look at _count models_ where we model integers greater than or equal to 0 using different distributions for the random error (ie, not a Normal distribution).
 
 ## Distributions for counts
 
-Let's review two common distributions for count data. Count data are integers greater than or equal to 0. These are discrete values we would use to record counts of events. 
+Let's review two common distributions for count data. Count data are integers greater than or equal to 0. These are discrete values we might use to record counts of events.
 
 ### Poisson distribution
 
@@ -207,7 +209,7 @@ c(mean(y1), var(y1))
 
 ### Negative binomial distribution
 
-The Negative binomial distribution is also a discrete probability distribution, but with two parameters: _mu_ (mean) and _theta_ (a dispersion parameter)
+The negative binomial distribution is also a discrete probability distribution, but with two parameters: _mu_ (mean) and _theta_ (a dispersion parameter)
 
 mu is the mean. Theta is a dispersion parameter that allows the _variance to be greater than the mean_.
 
@@ -259,7 +261,7 @@ c(mean(y3), var(y3))
 
 ## Simulating count data with conditional mean
 
-Above we plugged in a single mean. But perhaps the mean depends on some other variable(s). Perhaps the mean is lower for an "untreated" group than the mean for a "treated" group. This is a simple example of statistical modeling, which estimates the mean of a dependent variable conditional on values of predictor variables. 
+Above we simulated count data using a single mean. But perhaps the mean depends on some other variable(s). Perhaps the mean is lower for an "untreated" group than the mean for a "treated" group. This is a simple example of statistical modeling, which estimates the mean of a dependent variable conditional on values of predictor variables. 
 
 Let's simulate a bunch of 0s and 1s to indicate untreated (0) and treated (1)
 
@@ -329,10 +331,12 @@ log(exp(1.2 + 1.8*trt)) = 1.2 + 1.8*trt
 
 Let's fit a model to our simulated data. We generated the data so we know the correct model to specify!
 
-The "correct" model:
-`y1 <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))`
+The "correct" model is `y_resp = (Intercept) + b1*trt` because we simulated the data using the following code where 1.2 is the intercept and 1.8 is b1, short for beta_1, which is how model coefficients are often symbolized.
 
-`y1 ~ trt` is shorthand for "y1 = (Intercept) + slope*trt"
+`y_resp <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))`
+
+Recall:
+`y_resp ~ trt` is shorthand for "y_resp = (Intercept) + b1*trt"
 
 ```{r}
 m1 <- glm(y_resp ~ trt, family = poisson(link = "log"))
@@ -349,23 +353,23 @@ The coefficients are very close to the "true" values of 1.2 and 1.8.
 
 Notice the coefficients are on the log scale. We need to use `exp()` to get the coefficients on the original scale. The original scale is the _expected counts_.
 
-When trt == 0 the expected mean count is about 3.2.
+When trt == 0 the expected mean count is...
 
-exp(1.176377 + 1.814068 * 0) = exp(1.176377)
+exp(1.176377 + 1.814068 * 0) = exp(1.176377) = about 3
 
 ```{r}
 coef(m1)["(Intercept)"] |> exp()
 ```
 
-When trt == 1 (sum both coefficients) the expected mean count is about 20
+When trt == 1 (sum both coefficients) the expected mean is...
 
-exp(1.176377 + 1.814068 * 1) = exp(2.990444)
+exp(1.176377 + 1.814068 * 1) = exp(2.990444) =  about 20
 
 ```{r}
 sum(coef(m1)) |> exp()
 ```
 
-Exponentiating the slope coefficient tells us the _multiplicative effect_ of trt == 1. Expected count of y when trt = 1 is about 6.1 times the expected count when trt = 0.
+Exponentiating the slope coefficient tells us the _multiplicative effect_ of trt == 1. Expected count of y when trt == 1 is about 6.1 times the expected count when trt == 0.
 
 ```{r}
 coef(m1)["trt"] |> exp()
@@ -383,13 +387,13 @@ This is precisely the expected count we calculated above.
 sum(coef(m1)) |> exp()
 ```
 
-Let's use our model to simulate some data and see if it looks similar to our observed data set. Below we use `rpois()` again but this time with our model estimated coefficients. We then plot the original distribution of the raw data and compare it to the distribution of the model-simulated data.
+Let's use our model to simulate some data and see if it looks similar to our observed data set. Below we use `rpois()` again but this time with our model estimated coefficients. We then plot the original distribution of the raw data and compare it to the distribution of the model-simulated data. (Feel free to run this code multiple times to see how the model-simulated data changes)
 
 ```{r}
 sim_y_resp <- rpois(n = 1000, lambda = exp(1.176377 + 1.814068*trt))
 par(mfrow = c(1,2))
 plot(table(y_resp), main = "original")
-plot(table(sim_y_resp), main = "model simulated")
+plot(table(sim_y_resp), main = "model-simulated")
 ```
 
 Instead of manually using the `rpois()` function we could use the `simulate()` function with the fitted model object as follows. `nsim = 1` says to generate one set of data from the model.
@@ -398,7 +402,7 @@ Instead of manually using the `rpois()` function we could use the `simulate()` f
 sim_y_resp <- simulate(m1, nsim = 1)
 par(mfrow = c(1,2))
 plot(table(y_resp), main = "original")
-plot(table(sim_y_resp), main = "model simulated")
+plot(table(sim_y_resp), main = "model-simulated")
 ```
 
 
@@ -437,13 +441,13 @@ Again, the coefficients are very close to the "true" values of 1.2, 1.8 and 10.
 
 And again we need to use `exp()` to get our expected counts on the original scale, which is expected counts.
 
-When trt == 0 the expected mean count is about 3.3
+When trt == 0 the expected mean count is about 3
 
 ```{r}
 coef(m2)["(Intercept)"] |> exp()
 ```
 
-When trt == 1 (sum both coefficients) the expected mean count is about 19.6
+When trt == 1 (sum both coefficients) the expected mean count is about 20
 
 ```{r}
 sum(coef(m2)) |> exp()
@@ -462,7 +466,7 @@ Let's use our model to simulate some data and see if it looks similar to our obs
 sim_y2_resp <- simulate(m2, nsim = 1)
 par(mfrow = c(1,2))
 plot(table(y2_resp), main = "original")
-plot(table(sim_y2_resp), main = "model simulated")
+plot(table(sim_y2_resp), main = "model-simulated")
 
 ```
 
@@ -470,7 +474,7 @@ These look very similar because we fit the correct model.
 
 ## CODE ALONG 1
 
-Run the following lines of code to generate y
+Run the following lines of code to generate y which is a count conditional on variables "grp" and "x1". "grp" is a binary indicator that takes two values: "a" and "b". "x1" is a numeric value ranging uniformly from 1 to 10.
 
 ```{r}
 set.seed(4)
@@ -499,7 +503,7 @@ plot(table(sim_mod2))
 ```
 
 
-## Deviance
+## Model Summary and Deviance
 
 Let's look again at the summary of m1, the poisson model:
 
@@ -507,8 +511,24 @@ Let's look again at the summary of m1, the poisson model:
 summary(m1)
 ```
 
+The Deviance Residuals section summarizes the distribution of the residuals. Residuals represent the difference between what we observed and what our model predicts. When the fitted model is correct, deviance residuals should have an approximate standard normal distribution N(0,1). This provides a quick check of symmetry and range of the residuals.
 
-Notice the lines for Null deviance and Residual deviance. 
+```
+Deviance Residuals: 
+    Min       1Q   Median       3Q      Max  
+-3.0353  -0.7432  -0.1365   0.4641   3.3703
+```
+
+The Coefficients section presents null hypothesis tests that the predictor coefficients are 0. The `z value` is the test statistic, which is equal to the coefficient estimate divided by the standard error. The p-value, `Pr(>|z|)` is the probability of seeing a coefficient as big or bigger (or as small or smaller) if the coefficient really was 0.
+
+```
+Coefficients:
+            Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  1.17638    0.02466   47.70   <2e-16 ***
+trt          1.81407    0.02665   68.07   <2e-16 ***
+```
+
+The deviance section presents two sums of squared residuals: Null deviance and Residual deviance. 
 
 ```
     Null deviance: 7784.1  on 999  degrees of freedom
@@ -543,6 +563,7 @@ Three things to remember about deviance...
 
 We see a huge decrease in deviance in m1. 
 
+
 ## Poisson count modeling with realistic data
 
 Let's load some realistic data to explore and model. A data set giving the number of publications (articles) by doctoral candidates in biochemistry in relation to various predictors. 
@@ -553,6 +574,7 @@ Of interest is if the count of published articles can be modeled as a function o
 
 ```{r}
 data("PhDPublications", package = "AER")
+# create dataset with smaller name
 d <- PhDPublications
 rm(PhDPublications)
 ```
@@ -666,13 +688,13 @@ summary(phd.pois2)
 ```
 
 
-2. Interpret the coefficient for kid5
+2. Interpret the coefficient for kids
 
 ```{r}
 exp(confint(phd.pois2)) - 1
 ```
 
-Each additional child under the age of 5 can expect to reduce the count of published articles by 7 to 19%.
+Each additional child under the age of 6 that a PhD student has can expect to reduce the count of published articles by 7 to 19%.
 
 
 ## Evaluating model fit with rootograms 
@@ -693,7 +715,7 @@ coef(phd.pois2)
 
 Previously we simulated data and compared bar plots of the original data with the simulated data. Another way to visualize model fit for count models is through _rootograms_.
 
-The countreg package provides the rootogram() function to quickly generate "hanging" rootograms to visualize goodness of fit.
+The countreg package provides the `rootogram()` function to quickly generate "hanging" rootograms to visualize goodness of fit.
 
 ```{r}
 countreg::rootogram(phd.pois2)
@@ -746,13 +768,25 @@ See Appendix at conclusion of notebook for how to make rootograms "by hand".
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
 
-1. Add married and phdprestige to the following model and save as a new model object named "phd.pois3".
+1. Add married and prestige to the following model and save as a new model object named "phd.pois3".
 
 ```
-phd.pois <- glm(articles ~ female + mentor + kid5, data = d, family = poisson)
+phd.pois <- glm(articles ~ gender + mentor + kids, data = d, family = poisson)
 ```
+
+```{r}
+phd.pois3 <- glm(articles ~ gender + mentor + kids + married + prestige, 
+                 data = d, family = poisson)
+```
+
 
 2. Create a rootogram of the model
+
+```{r}
+countreg::rootogram(phd.pois3)
+```
+
+
 
 ## Negative Binomial count modeling with real data
 
@@ -769,10 +803,11 @@ c(mean(d$articles),
 
 The AER package provides a formal test of overdispersion with the `dispersiontest()` function. The null is the mean and variance are equal. Rejecting the null with a small p-value provides evidence of overdispersion.
 
-Let's fit a new Poisson model with more predictors.
+Let's fit a new Poisson model with all predictors.
 
 ```{r}
-phd.pois3 <- glm(articles ~ female + mentor + kid5 + married + phdprestige,
+phd.pois3 <- glm(articles ~ gender + married + kids + 
+                   married + prestige + mentor,
                  data = d, family = poisson)
 ```
 
@@ -782,9 +817,9 @@ Now test for overdispersion using the dispersiontest() function.
 AER::dispersiontest(phd.pois3)
 ```
 
-The super small p-value suggests we probably have overdispersion and that a Poisson model may not be suitable, which is also what we saw with the rootogram. In this case a negative binomial model may be more suitable since it accommodates overdispersion.
+The super small p-value confirms our suspicion that we probably have overdispersion and that a Poisson model may not be suitable, which is also what we saw with the rootogram. In this case a negative binomial model may be more suitable since it accommodates overdispersion.
  
-The `glm.nb()` function in the MASS package fits a negative binomial model. The syntax `articles ~ .` models articles as a function of all other columns in the PhdPubs data frame.
+Recall that the `glm.nb()` function in the MASS package fits a negative binomial model. The syntax `articles ~ .` models articles as a function of all other columns in the PhdPubs data frame.
 
 ```{r}
 phd.nb <- glm.nb(articles ~ ., data = d)
@@ -797,7 +832,7 @@ The interpretation of the coefficients is the same as a Poisson model.
 exp(coef(phd.nb))
 ```
  
-Is this model better than the Poisson model? We can asses this question using the AIC/BIC information criteria. Models with lower values are preferred.
+Is this model better than the Poisson model? We can asses this question using the AIC/BIC information criteria. Both provide scores that estimate how models will perform with out-of-sample data. Models with lower values are preferred.
 
 ```{r}
 AIC(phd.pois3, phd.nb)
@@ -807,7 +842,7 @@ AIC(phd.pois3, phd.nb)
 BIC(phd.pois3, phd.nb)
 ```
 
-It certainly seems like the negative binomial model is better than a Poisson model.
+df is the number of model parameters. The negative binomial model has one extra parameter: the dispersion parameter. It certainly seems like the negative binomial model is better than a Poisson model.
 
 A rootogram allows us to asses how well the model fits the observed data.
 
@@ -821,7 +856,7 @@ This certainly seems to fit much better.
 
 It's not unusual for real life count data to have more zeroes than would be expected of a Poisson or negative binomial model. When this happens we say we have "zero inflation".
 
-A common approach to modeling such data is to create a mixture of two models to account for the _extra zeroes_:
+A common approach to modeling such data is to create a _mixture_ of two models to account for the _extra zeroes_:
 
 1. a model for the occurrence of zeroes
 2. a model for the counts, which can also include zeroes
@@ -845,13 +880,13 @@ set.seed(10)
 zi <- rbinom(300, size = 1, prob = 0.7)
 ```
 
-Next we'll create a binary predictor variable called "trt"
+Next we'll create a simple binary predictor variable called "trt".
 
 ```{r}
 trt <- rep(0:1, each = 150)
 ```
 
-Now we'll simulate counts _conditional_ on our draws from the binomial distribution. If it's a 0, keep it. These are the "always zero" values. Otherwise take the result from a Poisson distribution with mean = exp(0.05 + 0.8*trt). This will produce additional zeroes.
+Now we'll simulate counts _conditional_ on our draws from the binomial distribution. If it's a 0, keep it. That's our count. These are the "always zero" values. Otherwise draw a value from a Poisson distribution with mean = exp(0.05 + 0.8*trt). This will produce additional zeroes.
 
 The mean of the Poisson distribution is as follows: 
 
@@ -880,10 +915,12 @@ countreg::rootogram(mod1)
 
 Underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
  
-Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function from the pscl package. This fits two models, separated by a `|`
+Now let's fit the "correct" model by accommodating the excess zeroes. For this we'll use the `zeroinfl()` function from the pscl package. This fits two models, separated by a `|`. 
 
-1. a Poisson count model: y ~ trt
-2. a binomial model: 1 (intercept only model)
+1. a count model (counts that include zeroes)
+2. a binomial model (only zeroes)
+
+Notice we have to specify the distribution for the count model: `dist = "poisson"`. The count model is `y ~ trt`. The binomial model is `y ~ 1`, which is an intercept-only model. That's a fancy way of saying it has no predictors.
 
 Notice the summary shows results for two models: a count model and a zero-inflation model.
 
@@ -899,80 +936,25 @@ countreg::rootogram(mod2)
 ```
 
 
-We can use the `plogis()` function to take the inverse logit of the binomial model coefficient to get the estimated probability of being an "always zero" count. Notice we come close to the "true" value of 0.3 we used to simulate the data.
+We can use the `plogis()` function to take the inverse logit of the binomial model coefficient to get the estimated probability of being an "always zero" count. Notice we come close to the "true" value of 0.3 we used to simulate the only-zeroes data.
  
 ```{r}
 plogis(coef(mod2)["zero_(Intercept)"])
 ```
 
-
-We can also simulate zero-inflated data that includes a negative binomial count model.
-
-Once again we start by simulating zeroes and ones using `rbinom()` which allows us to randomly sample from a binomial distribution. This time we use a sample size of 1000.
-
-```{r}
-set.seed(6)
-zi <- rbinom(1000, size = 1, prob = 0.7)
-```
-
-Next we simulate counts _conditional_ on our draws from the binomial distribution. If it's a 0, keep it. These are the "always zero" values. Otherwise take the result from a negative binomial distribution with mean = exp(0.6 + 1.8*trt) and theta = 9. This will produce additional zeroes.
-
-The mean of the negative binomial distribution is as follows: 
-
-1. 0.6 when trt = 0
-2. 0.6 + 1.8 = 24 when trt = 1
-
-```{r}
-set.seed(66)
-trt <- rep(0:1, each = 500)
-y2 <- ifelse(zi == 0, 0, rnbinom(1000, mu=exp(0.6 + 1.8*trt), size = 9))  
-dat2 <- data.frame(y2, trt)
-plot(table(dat2$y2))
-```
-
-If we model the data without accounting for the excess zeroes we get a badly fitting rootogram.
-
-```{r}
-mod3 <- glm.nb(y2 ~ trt, data = dat2)
-countreg::rootogram(mod3)
-```
-
-It's worth repeating: underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
-
-Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function. This fits two models, separated by the |
-
-1. a negative binomial count model: y2 ~ trt
-2. a binomial model: 1 (intercept only model)
-
-The summary shows the results for two models: a count model and a zero-inflation model.
-
-```{r}
-mod4 <- pscl::zeroinfl(y2 ~ trt | 1, data = dat2, dist = "negbin")
-summary(mod4)
-```
-
-
-The rootogram looks great. It should. We're fitting the "correct" model.
-
-```{r}
-countreg::rootogram(mod4)
-```
-
-And if we take the inverse logit of the binomial model, we see an estimated probability that is close to the "true" value of 0.3.
-
-```{r}
-plogis(coef(mod4)["zero_(Intercept)"])
-
-```
-
 If we don't specify anything after the |, the `zeroinfl()` function assumes you want to use all predictors in both models.
 
 ```{r}
-mod5 <- pscl::zeroinfl(y2 ~ trt, data = dat2, dist = "negbin")
-summary(mod5)
+mod3 <- pscl::zeroinfl(y ~ trt, data = dat, dist = "poisson")
+summary(mod3)
 ```
 
 Notice trt is included in the Zero-inflation model, but it doesn't appear to be useful.
+
+The `zeroinfl()` can also model negative binomial count models. Set `dist = "negbin`. We demonstrate this in the next Code Along.
+
+See the Appendix to this notebook for simulating zero-inflated negative binomial data.
+
 
 ## CODE ALONG 4
 
@@ -985,12 +967,31 @@ plot(table(d$articles))
 
 ```
 
-1. Fit a zero-inflated negative binomial model using all predictors. Call it "phd.zinb". 
+1. Fit a zero-inflated _negative binomial_ model using all predictors for both models. Call it "phd.zinb". Use `dist = "negbin`
+
+```{r}
+phd.zinb <- pscl::zeroinfl(articles ~ ., data = d, dist = "negbin")
+summary(phd.zinb)
+```
+
 
 2. Compare the zero-inflated negative binomial model to the negative binomial model we fit earlier (phd.nb) using AIC and BIC.
 
+```{r}
+AIC(phd.nb, phd.zinb)
+BIC(phd.nb, phd.zinb)
+```
+
 
 3. Compare rootograms for the two models.
+
+```{r}
+countreg::rootogram(phd.nb)
+```
+
+```{r}
+countreg::rootogram(phd.zinb)
+```
 
 
 ## Effect plots 
@@ -1001,11 +1002,11 @@ Effect plots are very useful for visualizing _interactions_ and _non-linear effe
 
 ### Interaction example
 
-Below we model count of articles published as a function of phdprestige, mentor, and their interaction. This says the effect of phdprestige depends on mentor and vice versa. What's the effect of phdprestige? It depends on mentor.
+Below we model count of articles published as a function of prestige, mentor, and their interaction. This says the effect of prestige depends on mentor and vice versa. What's the effect of prestige? It depends on mentor.
 
 ```{r}
-phd.nb2 <- glm.nb(articles ~ phdprestige + mentor +
-                   phdprestige:mentor, data = d)
+phd.nb2 <- glm.nb(articles ~ prestige + mentor +
+                   prestige:mentor, data = d)
 summary(phd.nb2)
 ```
 
@@ -1013,24 +1014,28 @@ The interaction coefficient appears to be small and negative. What does it mean?
 
 
 ```{r}
-mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "phdprestige"))
+mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "prestige"))
 plot(mentor_eff)
 
 ```
 
+Let's fix prestige to values of 1, 3, and 5
 
 ```{r}
-mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "phdprestige[1,3,5]"))
+mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "prestige[1,3,5]"))
 plot(mentor_eff)
 
 ```
+
+Let's put prestige on the x-axis and color lines by mentor at values of 3, 6, 9, and 12
 
 ```{r}
 mentor_eff <- ggpredict(model = phd.nb2, 
-                        terms = c("phdprestige","mentor[3,6,9,12]"))
+                        terms = c("prestige","mentor[3,6,9,12]"))
 plot(mentor_eff)
 ```
 
+This interaction, while statistically significant, seems very mild and not terribly important.
 
 ### Non-linear effect example
 
@@ -1059,10 +1064,60 @@ mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor[10:40]")
 plot(mentor_eff)
 ```
 
+There seems to be leveling off in the expected count of articles published by a student at the number articles published by the student's mentor increases. 
 
-## Rate models 
+## CODE ALONG 5
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
+
+1.) Does the effect of prestige on the count of articles depend on whether or not the student is married? Model articles as a function of prestige, married, and their interaction. Name the model "phd.nb4"
+
+```{r}
+phd.nb4 <- glm.nb(articles ~ prestige * married, data = d)
+summary(phd.nb4)
+```
+
+2) Create an effect plot to visualize the interaction. Place prestige on the x-axis.
+
+```{r}
+prestige_eff <- ggpredict(phd.nb4, terms = c("prestige", "married"))
+plot(prestige_eff)
+```
+
+
+
+## Wrap-up
+
+This was meant to show you the basics of count modeling in R. Hopefully you have a better grasp of how count modeling works. Scroll down for a few more topics.
+
+What we did today works for _independent counts_. Things get more complicated when we have _multiple measures_ on the same subject or _clusters_ of related subjects or observations. In that case we usually use mixed-effect or longitudinal count models. 
+
+Two packages to be aware of are lme4 and glmmTMB.
+
+- Multilevel/mixed-effect poisson models: `lme4::glmer()`
+- Multilevel/mixed-effect negative-binomial models: `lme4::glmer.nb()`
+- Multilevel/mixed-effect zero-inflated models: `glmmTMB::glmmTMB()`
+
+It's also not unheard of to just use linear models for counts. Sometimes they work just as well and can be easier to explain.
+
+## References
+
+- Builder C and Loughin T(2015). Analysis of Categorical Data with R. CRC Press. URL: http://www.chrisbilder.com/categorical/
+
+- Friendly M and Meyer D. (2016). Discrete Data Analysis with R. CRC Press. URL: http://ddar.datavis.ca/
+
+- Gelman A and Hill J. (2007). Data Analysis Using Regression and Multilevel/Hierarchical Models. Cambridge
+
+- Kleiber C, Zeileis A (2016). “Visualizing Count Data Regressions Using Rootograms.” The American Statistician, 70(3), 296–303. doi:10.1080/00031305.2016.1173590.  
+
+- Zeileis A, Kleiber C, and Jackman S. (2008). “Regression Models for Count Data in R.” Journal of Statistical Software, 27(8). URL http://www.jstatsoft.org/v27/i08/. 
+
+
+## Appendix: Rate models 
 
 Not all counts are created equal. For example two intersections may have similar counts of accidents per month. But if one intersection handles much less traffic than the other and has a similar number of accidents, then clearly it seems more dangerous.
+
+To analyze data like this we need to take into account the amount of traffic, or opportunities for accidents. This is often called the _exposure_.
 
 Let's simulate some data to illustrate.
 
@@ -1085,8 +1140,7 @@ head(rate_data)
 
 ```
 
-
-Notice the counts for observations 2 and 5 are similar, but the exposures, and thus the rates, are very different.
+Notice the counts for observations 2 and 5 are similar (129 vs 124), but the exposures, and thus the rates, are very different (0.464 vs 0.007).
  
 To model this data appropriately we should _include the exposure_. To do this we log transform the "exposure" and use either the offset argument or include in the model formula using the `offset()` function
 
@@ -1102,23 +1156,16 @@ all.equal(rate.mod1$coefficients, rate.mod2$coefficients)
 ```
 
 
-The interpretation is in terms of the _rate_ rather than the mean
+When we exponentiate the coefficients we get the estimated _rate_ rather than the expected count.
 
 ```{r}
 summary(rate.mod1)
 ```
 
-Notice the intercept is nowhere close to the true value of 3. It is the estimated _rate_ when when trt = 0.
+Estimated _rate_ when when trt = 0.
 
 ```{r}
 exp(coef(rate.mod1)["(Intercept)"])
-```
-
-
-The estimated rate when trt = 1 is exp(1.927) = 6.9 times that of the rate when trt = 0.
-
-```{r}
-exp(coef(rate.mod1)["trt"])
 ```
 
 The estimated rate when trt = 1 is exp(-6.19872 + 1.92684)
@@ -1127,7 +1174,13 @@ The estimated rate when trt = 1 is exp(-6.19872 + 1.92684)
 exp(sum(coef(rate.mod1)))
 ```
 
-To use the model to make predictions, we need to include an exposure. Below we get predicted values for the two levels of trt with exposure set to 10,000. (Notice we don't need to log transform the exposure.) The default prediction type is "link". In this case the link is the log transform. Notice the result closely matches the "true" values we used to simulate the data. 
+The estimated rate when trt = 1 is exp(1.927) = 6.9 times that of the rate when trt = 0.
+
+```{r}
+exp(coef(rate.mod1)["trt"])
+```
+
+To use the model to make predictions, we need to include an exposure. Below we get predicted values for the two levels of trt with exposure set to 10,000. (Notice we don't need to log transform the exposure when using `predict()`.) The default prediction type is "link". In this case the link is the log transform. Notice the result closely matches the "true" values we used to simulate the data. 
 
 ```{r}
 predict(rate.mod1, type = "link",
@@ -1221,29 +1274,6 @@ ggplot(eff_out2, aes(x, predicted)) +
 ```
 
 Changing the exposure _modifies expected counts but not expected rates_.
-
-## Wrap-up
-
-This was meant to show you the basics of count modeling in R. Hopefully you have a better grasp of how count modeling works. Scroll down for a few more topics.
-
-What we did today works for _independent counts_. Things get more complicated when we have _multiple measures_ on the same subject or _clusters_ of related subjects or observations. In that case we usually use mixed-effect or longitudinal count models. 
-
-Two packages to be aware of are lme4 and glmmTMB.
-
-- Multilevel/mixed-effect poisson models: `lmer4::glmer()`
-- Multilevel/mixed-effect negative-binomial models: `lme4::glmer.nb()`
-- Multilevel/mixed-effect zero-inflated models: `glmmTMB::glmmTMB()`
-
-It's also not unheard of to just use linear models for counts. Sometimes they work just as well and can be easier to explain.
-
-## References
-
-Gelman A and Hill J. (2007). Data Analysis Using Regression and Multilevel/Hierarchical Models. Cambridge
-
-Kleiber C, Zeileis A (2016). “Visualizing Count Data Regressions Using Rootograms.” The American Statistician, 70(3), 296–303. doi:10.1080/00031305.2016.1173590.  
-
-Zeileis, Achim, Christian Kleiber and Simon Jackman 2008. “Regression Models for Count Data in R.” Journal of Statistical Software, 27(8). URL http://www.jstatsoft.org/v27/i08/. 
-
 
 ## Appendix: Hurdle models
 
@@ -1485,3 +1515,63 @@ sum(residuals(phd.pois, type = "pearson")^2)/phd.pois$df.residual
 ```
 
 Notice also the summary output for the quasipoisson model does not return an AIC estimate. That's because have a quasi-likelihood, not a true likelihood. This is one reason why negative binomial models are usually preferred to model overdispersion in count models. 
+
+## Appendix: simulate zero-inflated negative binomial data
+
+We can also simulate zero-inflated data that includes a negative binomial count model. 
+
+Once again we start by simulating zeroes and ones using `rbinom()` which allows us to randomly sample from a binomial distribution. This time we use a sample size of 1000.
+
+```{r}
+set.seed(6)
+zi <- rbinom(1000, size = 1, prob = 0.7)
+```
+
+Next we simulate counts _conditional_ on our draws from the binomial distribution. If it's a 0, keep it. These are the "always zero" values. Otherwise take the result from a negative binomial distribution with mean = exp(0.6 + 1.8*trt) and theta = 9. This will produce additional zeroes.
+
+The mean of the negative binomial distribution is as follows: 
+
+1. 0.6 when trt = 0
+2. 0.6 + 1.8 = 24 when trt = 1
+
+```{r}
+set.seed(66)
+trt <- rep(0:1, each = 500)
+y2 <- ifelse(zi == 0, 0, rnbinom(1000, mu=exp(0.6 + 1.8*trt), size = 9))  
+dat2 <- data.frame(y2, trt)
+plot(table(dat2$y2))
+```
+
+If we model the data without accounting for the excess zeroes we get a badly fitting rootogram.
+
+```{r}
+mod3 <- glm.nb(y2 ~ trt, data = dat2)
+countreg::rootogram(mod3)
+```
+
+It's worth repeating: underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
+
+Now let's fit a model that accommodates excess zeroes using the `zeroinfl()` function. This fits two models, separated by the |
+
+1. a negative binomial count model: y2 ~ trt
+2. a binomial model: 1 (intercept only model)
+
+The summary shows the results for two models: a count model and a zero-inflation model.
+
+```{r}
+mod4 <- pscl::zeroinfl(y2 ~ trt | 1, data = dat2, dist = "negbin")
+summary(mod4)
+```
+
+The rootogram looks great. It should. We're fitting the "correct" model.
+
+```{r}
+countreg::rootogram(mod4)
+```
+
+And if we take the inverse logit of the binomial model, we see an estimated probability that is close to the "true" value of 0.3.
+
+```{r}
+plogis(coef(mod4)["zero_(Intercept)"])
+
+```
