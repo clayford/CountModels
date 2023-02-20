@@ -42,9 +42,13 @@ Insert a new R code chunk below and type and run the code: Sys.time()
 - fitting zero-inflated models
 - using effect plots to visualize models
 
-Appendix Topics (ie, topics cut for time)
+Appendix Topics (topics cut for time)
 - rate models
 - hurdle models
+- creating rootograms "by hand" 
+- glm residuals 
+- fitting quasipoisson models
+- simulate zero-inflated negative binomial data
 
 ## Packages
 
@@ -62,7 +66,7 @@ library(ggeffects)
 
 ## Linear Model Review
 
-Let's say we have the following data:
+Below I generate two variables: `x` and `y`. Notice `y` depends on `x`. We might say `x` is the _independent_ variable and `y` is the _dependent_ variable. 
 
 ```{r}
 x <- 1:25
@@ -76,7 +80,7 @@ y is completely determined by x.
 
 Let's add some "noise" to our data by adding random draws from a Normal distribution with mean = 0 and a standard deviation = 10.
 
-set.seed(1) ensures we all get the same "random" data
+`set.seed(1)` ensures we all get the same "random" data
 
 ```{r}
 set.seed(1)
@@ -91,6 +95,7 @@ y <- 10 + 5*x + noise
 plot(x, y)
 ```
 
+Now `y` is associated with `x` but not completely determined by `x`.
 
 This data is the combination of two parts:
 
@@ -114,15 +119,15 @@ generated it? In other words, work backwards and fill in the blanks:
 1. ____ + ____*x  (fixed part, the model)
 2. rnorm(n = 25, mean = 0, sd = ____)  (random part, error)
 
-That's basically what linear modeling is. Proposing a model and finding the most likely values of the model parameters.
+That's basically what linear modeling is. Proposing a model and finding the most likely values of the assumed probability distribution that generated the data.
 
 Traditional linear modeling assumes the following:
 
-1. the formula is a weighted sum of predictors (eg, 10 + 5x + 3z)
+1. the formula is a weighted sum of predictors (eg, 10 + 5x)
 2. the noise is a random draw from a Normal distribution with mean = 0
 3. the standard deviation of the Normal distribution is constant
 
-Linear modeling tries to recover the weights (or coefficients) in the first assumption (10, 5, 3) and the standard deviation in the 3rd assumption (10).
+Linear modeling tries to recover the weights (or coefficients) in the first assumption (10, 5) and the standard deviation in the 3rd assumption (10).
 
 To do this we can use `lm()`. The syntax "y ~ x" means we think the model is "y = intercept + slope*x". We usually save the model into an object. Below I save it to "mod".
 
@@ -147,7 +152,7 @@ We might use our model to make a prediction. For example, expected value of y wh
 predict(mod, data.frame(x = 10), interval = "confidence")
 ```
 
-We could also plot our fitted line through the data since we only have two dimensions. The symbold `|>` is a "pipe" that takes the result of the function on the left and "pipes" it into the first argument of the function on the right.
+We could also plot our fitted line through the data since we only have two dimensions. The symbol `|>` is a "pipe" that takes the result of the function on the left and "pipes" it into the first argument of the function on the right. We use the `ggpredict()` function from the ggeffects package to generate the predicted values and then pipe the values into a `plot()` method provided by ggeffects.
 
 ```{r}
 ggpredict(mod, terms = "x") |> plot(add.data = TRUE)
@@ -167,7 +172,7 @@ Let's review two common distributions for count data. Count data are integers gr
 
 The Poisson distribution is a discrete probability distribution with one parameter: _lambda_.
 
-lambda is the mean; the _variance and mean are equal_ in Poisson distributions.
+lambda is the mean and the variance; the _variance and mean are equal_ in Poisson distributions.
 
 Let's explore the Poisson distribution via simulation. We can use the `rpois()` function to generate random data with a specified lambda (mean). Notice the data are positive integers greater than or equal to 0.
 
@@ -199,7 +204,7 @@ We can also visualize the proportion of counts.
 table(y1) |> proportions() |> plot()
 ```
 
-Notice the mean and variance are roughly equal:
+Notice the mean and variance of the simulated data are roughly equal:
 
 ```{r}
 c(mean(y1), var(y1)) 
@@ -261,16 +266,16 @@ c(mean(y3), var(y3))
 
 ## Simulating count data with conditional mean
 
-Above we simulated count data using a single mean. But perhaps the mean depends on some other variable(s). Perhaps the mean is lower for an "untreated" group than the mean for a "treated" group. This is a simple example of statistical modeling, which estimates the mean of a dependent variable conditional on values of predictor variables. 
+Above we simulated count data using a single mean. But perhaps the mean depends on some other variable(s). Perhaps the mean is lower for an "untreated" group than the mean for a "treated" group. This is a simple example of statistical modeling, which estimates the mean of a dependent variable _conditional_ on values of predictor variables. 
 
-Let's simulate a bunch of 0s and 1s to indicate untreated (0) and treated (1)
+Let's simulate 1000 0s and 1s to indicate untreated (0) and treated (1)
 
 ```{r}
 set.seed(11)
 trt <- sample(0:1, size = 1000, replace = T)
 ```
 
-Now we randomly sample from a Poisson distribution with a mean of `exp(1.2 + 1.8*trt)`. The `exp()` function means exponentiate, or raise e to the power of the argument. Why use `exp()`? That ensures we get a positive mean. Lambda has to be positive. Here it's not necessary but as we'll see this transformation is built into count models.
+Now we randomly sample from a Poisson distribution with a mean of `exp(1.2 + 1.8*trt)`. The `exp()` function means exponentiate, or raise e to the power of the argument. Why use `exp()`? That ensures we get a positive value. Lambda has to be positive. Here it's not necessary but as we'll see this transformation is built into count models.
 
 ```{r}
 set.seed(22)
@@ -317,7 +322,7 @@ How to recover those "true" values? This is essentially count modeling.
 
 We use the `glm()` function to fit a poisson count model. Use the same way as `lm()`, but include the family argument: `family = poisson` 
 
-The `link = "log"` argument is assumed by default but is included here for completeness. Why "log"? Because it's the _link_ to the additive model. Recall that taking the log of an exponentiated value returns the original value.
+The `link = "log"` argument is assumed by default but is included here for completeness. Why "log"? Because it's the _link_ to the raw additive model. Recall that taking the log of an exponentiated value returns the original value.
 
 ```{r}
 log(exp(3))
@@ -351,7 +356,7 @@ coef(m1)
 
 The coefficients are very close to the "true" values of 1.2 and 1.8.
 
-Notice the coefficients are on the log scale. We need to use `exp()` to get the coefficients on the original scale. The original scale is the _expected counts_.
+Notice the coefficients are on the log scale. We need to use `exp()` to get expected counts. 
 
 When trt == 0 the expected mean count is...
 
@@ -381,7 +386,7 @@ Multiplying the exponentiated intercept (ie, the expected count when trt == 0) b
 exp(coef(m1)["(Intercept)"]) * 6.135355 
 ```
 
-This is precisely the expected count we calculated above.
+This is precisely the expected count when trt == 1 that we calculated above.
 
 ```{r}
 sum(coef(m1)) |> exp()
@@ -423,7 +428,7 @@ summary(m2)
 
 Notice the phrase: "(Dispersion parameter for Negative Binomial(9.8611) family taken to be 1)"
 
-This is confusing because "Dispersion parameter" in this sentence refers to the GLM dispersion parameter (phi), which is different from the negative binomial dispersion parameter (theta)! The GLM dispersion parameter gets estimated when we fit models with `family = quasipoisson(link = "log")`. (See Appendix: Modeling with quasipoisson)
+This is confusing because "Dispersion parameter" in this sentence refers to the GLM dispersion parameter (phi), which is different from the negative binomial dispersion parameter (theta)! The GLM dispersion parameter gets estimated when we fit models with `family = quasipoisson(link = "log")`. (See Appendix: Fitting quasipoisson models)
 
 We can extract theta from the model object if needed:
 
@@ -439,7 +444,7 @@ coef(m2)
 
 Again, the coefficients are very close to the "true" values of 1.2, 1.8 and 10.
 
-And again we need to use `exp()` to get our expected counts on the original scale, which is expected counts.
+And again we need to use `exp()` to get expected counts.
 
 When trt == 0 the expected mean count is about 3
 
@@ -511,7 +516,7 @@ Let's look again at the summary of m1, the poisson model:
 summary(m1)
 ```
 
-The Deviance Residuals section summarizes the distribution of the residuals. Residuals represent the difference between what we observed and what our model predicts. When the fitted model is correct, deviance residuals should have an approximate standard normal distribution N(0,1). This provides a quick check of symmetry and range of the residuals.
+The _Deviance Residuals_ section summarizes the distribution of the residuals. Residuals represent the difference between what we observed and what our model predicts. When the fitted model is correct, deviance residuals should have an approximate standard normal distribution N(0,1). This provides a quick check of symmetry and range of the residuals.
 
 ```
 Deviance Residuals: 
@@ -519,7 +524,7 @@ Deviance Residuals:
 -3.0353  -0.7432  -0.1365   0.4641   3.3703
 ```
 
-The Coefficients section presents null hypothesis tests that the predictor coefficients are 0. The `z value` is the test statistic, which is equal to the coefficient estimate divided by the standard error. The p-value, `Pr(>|z|)` is the probability of seeing a coefficient as big or bigger (or as small or smaller) if the coefficient really was 0.
+The _Coefficients_ section presents null hypothesis tests that the predictor coefficients are 0. The `z value` is the test statistic, which is equal to the coefficient estimate divided by the standard error. The p-value, `Pr(>|z|)` is the probability of seeing a coefficient as big or bigger (or as small or smaller) if the coefficient really was 0.
 
 ```
 Coefficients:
@@ -528,7 +533,7 @@ Coefficients:
 trt          1.81407    0.02665   68.07   <2e-16 ***
 ```
 
-The deviance section presents two sums of squared residuals: Null deviance and Residual deviance. 
+The _deviance_ section presents two sums of squared residuals: Null deviance and Residual deviance. 
 
 ```
     Null deviance: 7784.1  on 999  degrees of freedom
@@ -547,7 +552,7 @@ sum(residuals(m1, type = "deviance")^2)
 
 Null deviance "by hand"
 
-The null deviance is the sum of squared deviance residuals for a model with no predictors, just an intercept: y1 ~ 1
+The null deviance is the sum of squared deviance residuals for _a model with no predictors_, just an intercept: y1 ~ 1
 
 ```{r}
 null_m1 <- glm(y1 ~ 1, family = poisson)
@@ -568,7 +573,7 @@ We see a huge decrease in deviance in m1.
 
 Let's load some realistic data to explore and model. A data set giving the number of publications (articles) by doctoral candidates in biochemistry in relation to various predictors. 
 
-Source: "Discrete Data Analysis with R" by Michael Friendly and David Meyer.
+Source: Long, J. S. (1997). Regression Models for Categorical and Limited Dependent Variables, Sage.
 
 Of interest is if the count of published articles can be modeled as a function of the other variables. We don't know the "true" model or whether or not these variables have anything to do with the count of articles.
 
@@ -583,8 +588,8 @@ rm(PhDPublications)
 - gender: factor indicating gender.
 - married: factor. Is the PhD student married?
 - kids: Number of children less than 6 years old
-- prestige: prestige of the PhD department
-- mentor: Number of articles published by student's mentor.
+- prestige: prestige score of the PhD department; higher the number the more prestigious the program.
+- mentor: number of publications by the mentor in the preceeding three years
 
 ```{r}
 summary(d)
@@ -598,7 +603,7 @@ plot(table(d$articles))
 
 The number of published articles has quite a bit of variability. Do the other variables perhaps "explain" some of the variability?
 
-Let's fit a Poisson model using female and mentor as predictors. 
+Let's fit a Poisson model using just gender and mentor as predictors. 
 
 ```{r}
 phd.pois <- glm(articles ~ gender + mentor, 
@@ -677,7 +682,7 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 1. Add kids to the previous model and save the result as `phd.pois2`:
 
 ```
-phd.pois <- glm(articles ~ female + mentor, 
+phd.pois <- glm(articles ~ gender + mentor, 
                 data = d, family = poisson)
 ```
 
@@ -703,7 +708,7 @@ A good fitting model should generate counts that look similar to the original da
 
 In the previous code along exercise we proposed the following model:
 
-`articles = (Intercept) + female + married + kid5`
+`articles = (Intercept) + gender + mentor + kids`
 
 The result of the model was an intercept and coefficients for the 3 predictors
 
@@ -723,9 +728,9 @@ countreg::rootogram(phd.pois2)
 
 The red dots and connector lines visualize the model's expected number of articles.
 
-The length of the bars are the _observed counts_. Notice the counts have been transformed with a square root transformation. That's to help smaller numbers of counts not get squashed by larger numbers of counts.
+The length of the bars are the _observed counts_. Notice the counts have been transformed with a square root transformation. That helps smaller numbers of counts not get squashed by larger numbers of counts.
 
-Bars that dip below 0 are _underfit_; bars that hang above 0 are _overfit_.
+Bars that dip way below 0 are _underfit_; bars that hang way above 0 are _overfit_.
 
 We can use the max argument to increase or decrease the count displayed
 
@@ -863,6 +868,7 @@ A common approach to modeling such data is to create a _mixture_ of two models t
 
 Example: survey random sample of UVA students and ask how many alcoholic drinks they consumed over the most recent weekend.
 
+Two sources of zeroes:
 - Some don't drink, always zero
 - Some do drink but perhaps didn't drink that weekend, second source of zeroes
 
@@ -890,8 +896,8 @@ Now we'll simulate counts _conditional_ on our draws from the binomial distribut
 
 The mean of the Poisson distribution is as follows: 
 
-1. 0.05 when trt = 0
-2. 0.05 + 0.8 = 0.85 when trt = 1
+1. exp(0.05) when trt = 0
+2. exp(0.05 + 0.8) = exp(0.85) when trt = 1
 
 ```{r}
 set.seed(11)
@@ -915,12 +921,12 @@ countreg::rootogram(mod1)
 
 Underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
  
-Now let's fit the "correct" model by accommodating the excess zeroes. For this we'll use the `zeroinfl()` function from the pscl package. This fits two models, separated by a `|`. 
+Now let's fit the "correct" model by accommodating the excess zeroes. For this we'll use the `zeroinfl()` function from the pscl package. This fits two models, separated by a `|`:
 
 1. a count model (counts that include zeroes)
 2. a binomial model (only zeroes)
 
-Notice we have to specify the distribution for the count model: `dist = "poisson"`. The count model is `y ~ trt`. The binomial model is `y ~ 1`, which is an intercept-only model. That's a fancy way of saying it has no predictors.
+Notice we have to specify the distribution for the count model: `dist = "poisson"`. The count model is `y ~ trt`. The binomial model is `y ~ 1`, which is an intercept-only model (no predictors). This is the correct model because that's how we generated the data!
 
 Notice the summary shows results for two models: a count model and a zero-inflation model.
 
@@ -1022,7 +1028,8 @@ plot(mentor_eff)
 Let's fix prestige to values of 1, 3, and 5
 
 ```{r}
-mentor_eff <- ggpredict(model = phd.nb2, terms = c("mentor", "prestige[1,3,5]"))
+mentor_eff <- ggpredict(model = phd.nb2, 
+                        terms = c("mentor", "prestige[1,3,5]"))
 plot(mentor_eff)
 
 ```
@@ -1035,7 +1042,7 @@ mentor_eff <- ggpredict(model = phd.nb2,
 plot(mentor_eff)
 ```
 
-This interaction, while statistically significant, seems very mild and not terribly important.
+This interaction, while statistically significant, seems very mild and not practically significant.
 
 ### Non-linear effect example
 
@@ -1064,7 +1071,7 @@ mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor[10:40]")
 plot(mentor_eff)
 ```
 
-There seems to be leveling off in the expected count of articles published by a student at the number articles published by the student's mentor increases. 
+There seems to be leveling off in the expected count of articles published by a student as the number articles published by the student's mentor increases. 
 
 ## CODE ALONG 5
 
@@ -1109,6 +1116,8 @@ It's also not unheard of to just use linear models for counts. Sometimes they wo
 - Gelman A and Hill J. (2007). Data Analysis Using Regression and Multilevel/Hierarchical Models. Cambridge
 
 - Kleiber C, Zeileis A (2016). “Visualizing Count Data Regressions Using Rootograms.” The American Statistician, 70(3), 296–303. doi:10.1080/00031305.2016.1173590.  
+
+- Long, J. S. (1997). Regression Models for Categorical and Limited Dependent Variables, Sage.
 
 - Zeileis A, Kleiber C, and Jackman S. (2008). “Regression Models for Count Data in R.” Journal of Statistical Software, 27(8). URL http://www.jstatsoft.org/v27/i08/. 
 
@@ -1341,7 +1350,7 @@ mean(dat$y != 0)
 
 The binomial part of the hurdle model is the "Hurdle" to clear before the count model process kicks in. In this simple model, we might say we estimate about 40% of the subjects to clear the hurdle, which is what we specified when we generated the data.
 
-## Appendix: rootograms "by hand" 
+## Appendix: creating rootograms "by hand" 
 
 Recall this model and associate rootogram.
 
@@ -1457,7 +1466,7 @@ sign(obs - mu_hat) * sqrt(2*(obs * log(mu_hat) - (obs - mu_hat)))
 ```
 
 
-## Appendix: Modeling with quasipoisson
+## Appendix: Fitting quasipoisson models
 
 Another approach to handling overdispersion is to use quasi-likelihood models. This estimates a _GLM dispersion parameter_ that is used to increase the standard errors of the coefficients. 
 
