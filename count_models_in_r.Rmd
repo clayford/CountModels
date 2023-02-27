@@ -492,20 +492,10 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 1. Fit a model that attempts to "recover" the true values in the model specified above. Call the model 'mod2'
 
-```{r}
-mod2 <- glm(y ~ grp + x1, family = poisson)
-summary(mod2)
-```
 
 
 2. Simulate data from the model and compare to the original observed data.
 
-```{r}
-sim_mod2 <- simulate(mod2, nsim = 1)
-par(mfrow = c(1,2))
-plot(table(y))
-plot(table(sim_mod2))
-```
 
 
 ## Model Summary and Deviance
@@ -686,20 +676,11 @@ phd.pois <- glm(articles ~ gender + mentor,
                 data = d, family = poisson)
 ```
 
-```{r}
-phd.pois2 <- glm(articles ~ gender + mentor + kids, 
-                data = d, family = poisson)
-summary(phd.pois2)
-```
 
 
 2. Interpret the coefficient for kids
 
-```{r}
-exp(confint(phd.pois2)) - 1
-```
 
-Each additional child under the age of 6 that a PhD student has can expect to reduce the count of published articles by 7 to 19%.
 
 
 ## Evaluating model fit with rootograms 
@@ -779,17 +760,9 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 phd.pois <- glm(articles ~ gender + mentor + kids, data = d, family = poisson)
 ```
 
-```{r}
-phd.pois3 <- glm(articles ~ gender + mentor + kids + married + prestige, 
-                 data = d, family = poisson)
-```
 
 
 2. Create a rootogram of the model
-
-```{r}
-countreg::rootogram(phd.pois3)
-```
 
 
 
@@ -970,34 +943,18 @@ Recall the distribution of PhD articles. Might there be 0 inflation? Maybe some 
 
 ```{r}
 plot(table(d$articles))
-
 ```
 
 1. Fit a zero-inflated _negative binomial_ model using all predictors for both models. Call it "phd.zinb". Use `dist = "negbin`
 
-```{r}
-phd.zinb <- pscl::zeroinfl(articles ~ ., data = d, dist = "negbin")
-summary(phd.zinb)
-```
 
 
 2. Compare the zero-inflated negative binomial model to the negative binomial model we fit earlier (phd.nb) using AIC and BIC.
 
-```{r}
-AIC(phd.nb, phd.zinb)
-BIC(phd.nb, phd.zinb)
-```
 
 
 3. Compare rootograms for the two models.
 
-```{r}
-countreg::rootogram(phd.nb)
-```
-
-```{r}
-countreg::rootogram(phd.zinb)
-```
 
 
 ## Effect plots 
@@ -1079,17 +1036,9 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 1.) Does the effect of prestige on the count of articles depend on whether or not the student is married? Model articles as a function of prestige, married, and their interaction. Name the model "phd.nb4"
 
-```{r}
-phd.nb4 <- glm.nb(articles ~ prestige * married, data = d)
-summary(phd.nb4)
-```
 
 2) Create an effect plot to visualize the interaction. Place prestige on the x-axis.
 
-```{r}
-prestige_eff <- ggpredict(phd.nb4, terms = c("prestige", "married"))
-plot(prestige_eff)
-```
 
 
 
