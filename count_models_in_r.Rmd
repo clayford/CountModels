@@ -55,13 +55,14 @@ Appendix Topics (topics cut for time)
 Let's load some packages we're going to use today.
 
 ```{r}
-# install.packages("countreg", repos="http://R-Forge.R-project.org")
-library(countreg)
+# install.packages("topmodels", repos = "https://R-Forge.R-project.org")
+library(topmodels)
 
 library(pscl)
 library(AER)
 library(ggplot2)
 library(ggeffects)
+library(MASS)
 ```
 
 ## Linear Model Review
@@ -155,10 +156,10 @@ predict(mod, data.frame(x = 10), interval = "confidence")
 We could also plot our fitted line through the data since we only have two dimensions. The symbol `|>` is a "pipe" that takes the result of the function on the left and "pipes" it into the first argument of the function on the right. We use the `ggpredict()` function from the ggeffects package to generate the predicted values and then pipe the values into a `plot()` method provided by ggeffects.
 
 ```{r}
-ggpredict(mod, terms = "x") |> plot(add.data = TRUE)
+ggpredict(mod, terms = "x") |> plot(show_data = TRUE)
 
 # equivalent to...
-# plot(ggpredict(mod, terms = "x"), add.data = TRUE)
+# plot(ggpredict(mod, terms = "x"), show_data = TRUE)
 ```
 
 
@@ -506,14 +507,6 @@ Let's look again at the summary of m1, the poisson model:
 summary(m1)
 ```
 
-The _Deviance Residuals_ section summarizes the distribution of the residuals. Residuals represent the difference between what we observed and what our model predicts. When the fitted model is correct, deviance residuals should have an approximate standard normal distribution N(0,1). This provides a quick check of symmetry and range of the residuals.
-
-```
-Deviance Residuals: 
-    Min       1Q   Median       3Q      Max  
--3.0353  -0.7432  -0.1365   0.4641   3.3703
-```
-
 The _Coefficients_ section presents null hypothesis tests that the predictor coefficients are 0. The `z value` is the test statistic, which is equal to the coefficient estimate divided by the standard error. The p-value, `Pr(>|z|)` is the probability of seeing a coefficient as big or bigger (or as small or smaller) if the coefficient really was 0.
 
 ```
@@ -579,7 +572,7 @@ rm(PhDPublications)
 - married: factor. Is the PhD student married?
 - kids: Number of children less than 6 years old
 - prestige: prestige score of the PhD department; higher the number the more prestigious the program.
-- mentor: number of publications by the mentor in the preceeding three years
+- mentor: number of publications by the mentor in the preceding three years
 
 ```{r}
 summary(d)
@@ -676,6 +669,10 @@ phd.pois <- glm(articles ~ gender + mentor,
                 data = d, family = poisson)
 ```
 
+```{r}
+phd.pois2 <- glm(articles ~ gender + mentor + kids, 
+                data = d, family = poisson)
+```
 
 
 2. Interpret the coefficient for kids
@@ -701,10 +698,10 @@ coef(phd.pois2)
 
 Previously we simulated data and compared bar plots of the original data with the simulated data. Another way to visualize model fit for count models is through _rootograms_.
 
-The countreg package provides the `rootogram()` function to quickly generate "hanging" rootograms to visualize goodness of fit.
+The topmodels package provides the `rootogram()` function to quickly generate "hanging" rootograms to visualize goodness of fit.
 
 ```{r}
-countreg::rootogram(phd.pois2)
+topmodels::rootogram(phd.pois2)
 ```
 
 The red dots and connector lines visualize the model's expected number of articles.
@@ -716,7 +713,7 @@ Bars that dip way below 0 are _underfit_; bars that hang way above 0 are _overfi
 We can use the max argument to increase or decrease the count displayed
 
 ```{r}
-countreg::rootogram(phd.pois, max = 15)
+topmodels::rootogram(phd.pois, xlim = c(0, 15))
 ```
 
 
@@ -725,19 +722,13 @@ There are two other styles available: standing and suspended
 The standing version plots the model predicted counts (red line) over the observed counts (bars).
 
 ```{r}
-countreg::rootogram(phd.pois2, style = "standing")
+topmodels::rootogram(phd.pois2, style = "standing")
 ```
 
 The suspended version uses less ink and shows just the under and over-fit counts.
 
 ```{r}
-countreg::rootogram(phd.pois2, style = "suspended")
-```
-
-If preferred, we can request a ggplot2 version
-
-```{r}
-autoplot(rootogram(phd.pois2))
+topmodels::rootogram(phd.pois2, style = "suspended")
 ```
 
 This is an ok not great fitting model. We are underfitting 0 counts, overfitting 1, 2, and 3 counts, then underfitting counts 4 - 7.
@@ -745,7 +736,7 @@ This is an ok not great fitting model. We are underfitting 0 counts, overfitting
 Recall our earlier toy model for which we fit the "correct" model. Notice we're not consistently over or underfitting counts. The counts seem to vary around 0 randomly.
 
 ```{r}
-countreg::rootogram(m1)
+topmodels::rootogram(m1)
 ```
 
 See Appendix at conclusion of notebook for how to make rootograms "by hand".
@@ -825,7 +816,7 @@ df is the number of model parameters. The negative binomial model has one extra 
 A rootogram allows us to asses how well the model fits the observed data.
 
 ```{r}
-countreg::rootogram(phd.nb)
+topmodels::rootogram(phd.nb)
 ```
 
 This certainly seems to fit much better.
@@ -889,7 +880,7 @@ summary(mod1)
 The summary looks good if you're into significant p-values, but the rootogram tells a different story.
 
 ```{r}
-countreg::rootogram(mod1)
+topmodels::rootogram(mod1)
 ```
 
 Underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
@@ -911,7 +902,7 @@ summary(mod2)
 The rootogram shows a much better fitting model.
 
 ```{r}
-countreg::rootogram(mod2)
+topmodels::rootogram(mod2)
 ```
 
 
@@ -1242,7 +1233,7 @@ Example: number of cigarettes smoked in one week.
 - Zero counts are non-smokers
 - non-zero counts are smokers (ie, zero truncated)
 
-We can simulate data as before using the `rztpois()` function from the countreg package, which simulates data from a zero-truncated poisson distribution.
+We can simulate data as before using the `rztpois()` function from the topmodels package, which simulates data from a zero-truncated poisson distribution.
 
 two means: 0.9 when trt = 0; 2.4 when trt = 1
 
@@ -1266,7 +1257,7 @@ Fit a model to our data that does not accommodate excess zeroes
 ```{r}
 mod1 <- glm(y ~ trt, data = dat, family = poisson)
 summary(mod1)
-countreg::rootogram(mod1)
+topmodels::rootogram(mod1)
 ```
 
 
@@ -1282,7 +1273,7 @@ summary(mod2)
 
 
 ```{r}
-countreg::rootogram(mod2)
+topmodels::rootogram(mod2)
 ```
 
 Use the `plogis()` function to take the inverse logit of the binomial model coefficient to get the estimated probability of clearing the "hurdle" (ie, having a count greater than 0)
@@ -1472,7 +1463,7 @@ The dispersion parameter is estimated by taking the sum of the squared Pearson r
 sum(residuals(phd.pois, type = "pearson")^2)/phd.pois$df.residual
 ```
 
-Notice also the summary output for the quasipoisson model does not return an AIC estimate. That's because have a quasi-likelihood, not a true likelihood. This is one reason why negative binomial models are usually preferred to model overdispersion in count models. 
+Notice also the summary output for the quasipoisson model does not return an AIC estimate. That's because we have a quasi-likelihood, not a true likelihood. This is one reason why negative binomial models are usually preferred to model overdispersion in count models. 
 
 ## Appendix: simulate zero-inflated negative binomial data
 
@@ -1504,7 +1495,7 @@ If we model the data without accounting for the excess zeroes we get a badly fit
 
 ```{r}
 mod3 <- glm.nb(y2 ~ trt, data = dat2)
-countreg::rootogram(mod3)
+topmodels::rootogram(mod3)
 ```
 
 It's worth repeating: underfitting zeroes and overfitting counts of 1 and 2 is characteristic of zero-inflated data.
@@ -1524,7 +1515,7 @@ summary(mod4)
 The rootogram looks great. It should. We're fitting the "correct" model.
 
 ```{r}
-countreg::rootogram(mod4)
+topmodels::rootogram(mod4)
 ```
 
 And if we take the inverse logit of the binomial model, we see an estimated probability that is close to the "true" value of 0.3.
