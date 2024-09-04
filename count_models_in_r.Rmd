@@ -30,19 +30,19 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 ## CODE ALONG 0
 
-Insert a new R code chunk below and type and run the code: Sys.time()
+Insert a new R code chunk below and type and run the code: `Sys.time()`
 
 
 ## Agenda
 
-- linear model review
 - explore distributions for counts: Poisson and Negative Binomial
 - fitting/interpreting Poisson and Negative Binomial count models
 - evaluate count models with rootograms
 - fitting zero-inflated models
-- using effect plots to visualize models
+- using effect plots to visualize models with interactions
 
 Appendix Topics (topics cut for time)
+- modeling non-linear effects
 - rate models
 - hurdle models
 - creating rootograms "by hand" 
@@ -65,109 +65,10 @@ library(ggeffects)
 library(MASS)
 ```
 
-## Linear Model Review
-
-Below I generate two variables: `x` and `y`. Notice `y` depends on `x`. We might say `x` is the _independent_ variable and `y` is the _dependent_ variable. 
-
-```{r}
-x <- 1:25
-y <- 10 + 5*x
-plot(x, y)
-```
-
-
-10 is the intercept, 5 is the slope.
-y is completely determined by x.
-
-Let's add some "noise" to our data by adding random draws from a Normal distribution with mean = 0 and a standard deviation = 10.
-
-`set.seed(1)` ensures we all get the same "random" data
-
-```{r}
-set.seed(1)
-noise <- rnorm(n = 25, mean = 0, sd = 10)
-```
-
-
-Add the noise to 10 + 5*x and re-draw plot
-
-```{r}
-y <- 10 + 5*x + noise
-plot(x, y)
-```
-
-Now `y` is associated with `x` but not completely determined by `x`.
-
-This data is the combination of two parts:
-
-1. _fixed_: 10 + 5*x
-2. _random_: rnorm(n = 25, mean = 0, sd = 10)
-
-We could also combine the two parts in a single call to `rnorm()` where we enter `10 + 5*x` as the mean. In other words, randomly generate Normal data with a _conditional mean_.
-
-```{r}
-set.seed(1)
-y <- rnorm(n = 25, mean = 10 + 5*x, sd = 10)
-plot(x, y)
-```
-
-
-Each y is drawn from a Normal distribution with mean _dependent on x_.
-
-What if we were given this data and told to determine the process that
-generated it? In other words, work backwards and fill in the blanks:
-
-1. ____ + ____*x  (fixed part, the model)
-2. rnorm(n = 25, mean = 0, sd = ____)  (random part, error)
-
-That's basically what linear modeling is. Proposing a model and finding the most likely values of the assumed probability distribution that generated the data.
-
-Traditional linear modeling assumes the following:
-
-1. the formula is a weighted sum of predictors (eg, 10 + 5x)
-2. the noise is a random draw from a Normal distribution with mean = 0
-3. the standard deviation of the Normal distribution is constant
-
-Linear modeling tries to recover the weights (or coefficients) in the first assumption (10, 5) and the standard deviation in the 3rd assumption (10).
-
-To do this we can use `lm()`. The syntax "y ~ x" means we think the model is "y = intercept + slope*x". We usually save the model into an object. Below I save it to "mod".
-
-```{r}
-mod <- lm(y ~ x)
-summary(mod)
-```
-
-The model returns the following estimates:
-
-- rnorm(mean = 11.135 + 5.042*x, sd = 9.7)
-
-This is close to the "true" values we used to generate the data:
-
-- rnorm(mean = 10 + 5*x, sd = 10)
-
-This is because we fit the correct model. We simulated the data, so we knew which model to fit. This doesn't happen in real life.
-
-We might use our model to make a prediction. For example, expected value of y when x = 10 with a 95% confidence interval.
-
-```{r}
-predict(mod, data.frame(x = 10), interval = "confidence")
-```
-
-We could also plot our fitted line through the data since we only have two dimensions. The symbol `|>` is a "pipe" that takes the result of the function on the left and "pipes" it into the first argument of the function on the right. We use the `ggpredict()` function from the ggeffects package to generate the predicted values and then pipe the values into a `plot()` method provided by ggeffects.
-
-```{r}
-ggpredict(mod, terms = "x") |> plot(show_data = TRUE)
-
-# equivalent to...
-# plot(ggpredict(mod, terms = "x"), show_data = TRUE)
-```
-
-
-Today we look at _count models_ where we model integers greater than or equal to 0 using different distributions for the random error (ie, not a Normal distribution).
 
 ## Distributions for counts
 
-Let's review two common distributions for count data. Count data are integers greater than or equal to 0. These are discrete values we might use to record counts of events.
+Count data are integers greater than or equal to 0. These are discrete values we might use to record counts of events. Let's review two common probability distributions for count data. 
 
 ### Poisson distribution
 
@@ -192,14 +93,15 @@ table(y1)
 ```
 
 
-Visualize distribution of counts
+Visualize distribution of counts. The `|>` symbol is the _pipe operator_. It takes the output of a function and passes it to the first argument of the next function.
 
 ```{r}
 table(y1) |> plot()
+# same as plot(table(y1))
 ```
 
 
-We can also visualize the proportion of counts.
+We can also visualize the proportion of counts. The proportions sum to 1.
 
 ```{r}
 table(y1) |> proportions() |> plot()
@@ -239,7 +141,7 @@ Create table of the counts of distinct values. Top row is the count, bottom row 
 table(y2)
 ```
 
-Visualize the distribution of counts
+Visualize the distribution of counts:
 
 ```{r}
 table(y2) |> plot()
@@ -286,13 +188,13 @@ y_resp <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))
 Expected count when trt = 0
 
 ```{r}
-exp(1.2) # about 3
+exp(1.2 + 1.8*0) # about 3
 ```
 
 expected count when trt = 1
 
 ```{r}
-exp(1.2 + 1.8) # about 20
+exp(1.2 + 1.8*1) # about 20
 ```
 
 Plot of y1 distribution. Notice the two distinct humps for each group.
@@ -321,7 +223,7 @@ How to recover those "true" values? This is essentially count modeling.
 
 ### Fitting a Poisson count model
 
-We use the `glm()` function to fit a poisson count model. Use the same way as `lm()`, but include the family argument: `family = poisson` 
+We use the `glm()` function to fit a poisson count model. Use the same way as `lm()`, but include the family argument: `family = poisson(link = "log")` 
 
 The `link = "log"` argument is assumed by default but is included here for completeness. Why "log"? Because it's the _link_ to the raw additive model. Recall that taking the log of an exponentiated value returns the original value.
 
@@ -342,6 +244,7 @@ The "correct" model is `y_resp = (Intercept) + b1*trt` because we simulated the 
 `y_resp <- rpois(n = 1000, lambda = exp(1.2 + 1.8*trt))`
 
 Recall:
+
 `y_resp ~ trt` is shorthand for "y_resp = (Intercept) + b1*trt"
 
 ```{r}
@@ -392,25 +295,6 @@ This is precisely the expected count when trt == 1 that we calculated above.
 ```{r}
 sum(coef(m1)) |> exp()
 ```
-
-Let's use our model to simulate some data and see if it looks similar to our observed data set. Below we use `rpois()` again but this time with our model estimated coefficients. We then plot the original distribution of the raw data and compare it to the distribution of the model-simulated data. (Feel free to run this code multiple times to see how the model-simulated data changes)
-
-```{r}
-sim_y_resp <- rpois(n = 1000, lambda = exp(1.176377 + 1.814068*trt))
-par(mfrow = c(1,2))
-plot(table(y_resp), main = "original")
-plot(table(sim_y_resp), main = "model-simulated")
-```
-
-Instead of manually using the `rpois()` function we could use the `simulate()` function with the fitted model object as follows. `nsim = 1` says to generate one set of data from the model.
-
-```{r}
-sim_y_resp <- simulate(m1, nsim = 1)
-par(mfrow = c(1,2))
-plot(table(y_resp), main = "original")
-plot(table(sim_y_resp), main = "model-simulated")
-```
-
 
 ### Fitting a Negative binomial count model
 
@@ -465,19 +349,6 @@ The multiplicative effect of trt==1 is about 5.9.
 coef(m2)["trt"] |> exp()
 ```
 
-Let's use our model to simulate some data and see if it looks similar to our observed data set. Once again we can use the `simulate()` function to do this.
-
-
-```{r}
-sim_y2_resp <- simulate(m2, nsim = 1)
-par(mfrow = c(1,2))
-plot(table(y2_resp), main = "original")
-plot(table(sim_y2_resp), main = "model-simulated")
-
-```
-
-These look very similar because we fit the correct model. 
-
 ## CODE ALONG 1
 
 Run the following lines of code to generate y which is a count conditional on variables "grp" and "x1". "grp" is a binary indicator that takes two values: "a" and "b". "x1" is a numeric value ranging uniformly from 1 to 10.
@@ -491,11 +362,8 @@ y <- rpois(n = 300, lambda = exp(1.8 + 1.5*(grp=="b") + -0.6*x1))
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
 
-1. Fit a model that attempts to "recover" the true values in the model specified above. Call the model 'mod2'
+Fit a model that attempts to "recover" the true values in the model specified above. Call the model 'mod2'
 
-
-
-2. Simulate data from the model and compare to the original observed data.
 
 
 
@@ -525,6 +393,9 @@ Residual deviance: 1099.3  on 998  degrees of freedom
 ```
 
 Residuals represent the difference between what we observed and what our model predicts. There are several types of residuals for GLM models. The Null and Residual deviance are the sum of squares of the _deviance residuals_.
+
+See this article for more information on deviance residuals:
+<https://library.virginia.edu/data/articles/understanding-deviance-residuals>
 
 Residual deviance "by hand"
 
@@ -595,7 +466,7 @@ phd.pois <- glm(articles ~ gender + mentor,
 summary(phd.pois)
 ```
 
-The Residual deviance is much lower than the Null deviance, suggesting the female and mentor variables help explain some of the variability in article count and are at least better than simply taking the mean (ie, the null intercept-only model).
+The Residual deviance is lower than the Null deviance, suggesting the female and mentor variables help explain some of the variability in article count and are at least better than simply taking the mean (ie, the null intercept-only model).
 
 Naive interpretation of coefficients.
 
@@ -613,7 +484,7 @@ coef(phd.pois) |> exp()
 
 ```
 
-The expected number of publications for female candidates is about 0.83 times that of male candidates, or about a 17% decrease
+The expected number of publications for female candidates is about 0.83 times that of male candidates, or about 17% fewer.
 
 Each additional mentor publication increases expected count of published articles by a factor of about 1.025, or about 2.5%.
 
@@ -647,16 +518,8 @@ exp(confint(phd.pois))
 
 The effect of female is estimated to decrease expected published article count anywhere from a factor of 0.75 to 0.92, or 25% to 8%.
 
-_We should check the fit of the model before putting too much stock into these interpretations_. We could do something like the following, where we simulate counts from our model and compare to the observed data. Notice our model is estimating much fewer 0 counts and far fewer bigger counts. Re-run the chunk multiple times if you like.
+_We should check the fit of the model before putting too much stock into these interpretations_. That's what we do next.
 
-```{r}
-sim_articles <- simulate(phd.pois)
-par(mfrow = c(1,2))
-plot(table(d$articles))
-plot(table(sim_articles$sim_1))
-```
-
-This doesn't look good. We'll explore another model fit visualization below called _rootograms_.
 
 ## CODE ALONG 2
 
@@ -692,11 +555,10 @@ The result of the model was an intercept and coefficients for the 3 predictors
 
 ```{r}
 coef(phd.pois2)
-
 ```
 
 
-Previously we simulated data and compared bar plots of the original data with the simulated data. Another way to visualize model fit for count models is through _rootograms_.
+One way to visualize model fit for count models is through _rootograms_.
 
 The topmodels package provides the `rootogram()` function to quickly generate "hanging" rootograms to visualize goodness of fit.
 
@@ -710,7 +572,7 @@ The length of the bars are the _observed counts_. Notice the counts have been tr
 
 Bars that dip way below 0 are _underfit_; bars that hang way above 0 are _overfit_.
 
-We can use the max argument to increase or decrease the count displayed
+We can use the `xlim` argument to increase or decrease the count displayed
 
 ```{r}
 topmodels::rootogram(phd.pois, xlim = c(0, 15))
@@ -731,7 +593,7 @@ The suspended version uses less ink and shows just the under and over-fit counts
 topmodels::rootogram(phd.pois2, style = "suspended")
 ```
 
-This is an ok not great fitting model. We are underfitting 0 counts, overfitting 1, 2, and 3 counts, then underfitting counts 4 - 7.
+This is an ok not great fitting model. We are underfitting 0 counts and overfitting 1, 2, and 3 counts.
 
 Recall our earlier toy model for which we fit the "correct" model. Notice we're not consistently over or underfitting counts. The counts seem to vary around 0 randomly.
 
@@ -780,7 +642,7 @@ phd.pois3 <- glm(articles ~ gender + married + kids +
                  data = d, family = poisson)
 ```
 
-Now test for overdispersion using the dispersiontest() function.
+Now test for overdispersion using the `dispersiontest()` function.
 
 ```{r}
 AER::dispersiontest(phd.pois3)
@@ -992,44 +854,24 @@ plot(mentor_eff)
 
 This interaction, while statistically significant, seems very mild and not practically significant.
 
-### Non-linear effect example
-
-A common approach to modeling non-linear effects is to use a flexible cubic spline. Below we model the count of articles as function of mentor with a 3 degree of freedom natural cubic spline. The 3 degrees of freedom says we think the trajectory of the count could potentially change 3 times as mentor increases. One way to think of splines is as a more sophisticated version of polynomials (eg, x + x^2 + x^3).
-
-Below we load the splines package that comes with R and use the `ns()` function to create what is called a "spline basis". This basically transforms the single mentor variable into three separate variables to allow for a non-linear relationship. Notice the output is impossible to interpret other than to conclude that the non-linear effects may be justified.
-
-```{r}
-library(splines)
-phd.nb3 <- glm.nb(articles ~ ns(mentor, df = 3), data = d)
-summary(phd.nb3)
-```
-
-Once again effect plots can help us visualize the non-linear effect.
-
-```{r}
-mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor")
-plot(mentor_eff)
-
-```
-
-We can look at just a certain range of mentor using the syntax `mentor[10:40]`
-
-```{r}
-mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor[10:40]")
-plot(mentor_eff)
-```
-
-There seems to be leveling off in the expected count of articles published by a student as the number articles published by the student's mentor increases. 
-
 ## CODE ALONG 5
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
 
-1.) Does the effect of prestige on the count of articles depend on whether or not the student is married? Model articles as a function of prestige, married, and their interaction. Name the model "phd.nb4"
+1. Model articles as a function of mentor, gender, prestige and the interaction of gender and prestige as a negative binomial count model, and look at the summary.
 
+```{r}
+phd.nb3 <- glm.nb(articles ~ mentor + gender + prestige + 
+                   gender:prestige, data = d)
+summary(phd.nb3)
+```
 
-2) Create an effect plot to visualize the interaction. Place prestige on the x-axis.
+2. Create an effect plot to visualize the interaction between prestige and gender.
 
+```{r}
+ggpredict(phd.nb3, terms = c("prestige", "gender")) |> 
+  plot()
+```
 
 
 
@@ -1060,6 +902,37 @@ It's also not unheard of to just use linear models for counts. Sometimes they wo
 - Long, J. S. (1997). Regression Models for Categorical and Limited Dependent Variables, Sage.
 
 - Zeileis A, Kleiber C, and Jackman S. (2008). “Regression Models for Count Data in R.” Journal of Statistical Software, 27(8). URL http://www.jstatsoft.org/v27/i08/. 
+
+
+
+## Appendix: Non-linear effects
+
+A common approach to modeling non-linear effects is to use a flexible cubic spline. Below we model the count of articles as function of mentor with a 3 degree of freedom natural cubic spline. The 3 degrees of freedom says we think the trajectory of the count could potentially change 3 times as mentor increases. One way to think of splines is as a more sophisticated version of polynomials (eg, x + x^2 + x^3).
+
+Below we load the splines package that comes with R and use the `ns()` function to create what is called a "spline basis". This basically transforms the single mentor variable into three separate variables to allow for a non-linear relationship. Notice the output is impossible to interpret other than to conclude that the non-linear effects may be justified.
+
+```{r}
+library(splines)
+phd.nb3 <- glm.nb(articles ~ ns(mentor, df = 3), data = d)
+summary(phd.nb3)
+```
+
+Once again effect plots can help us visualize the non-linear effect.
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor")
+plot(mentor_eff)
+
+```
+
+We can look at just a certain range of mentor using the syntax `mentor[10:40]`
+
+```{r}
+mentor_eff <- ggpredict(model = phd.nb3, terms = "mentor[10:40]")
+plot(mentor_eff)
+```
+
+There seems to be leveling off in the expected count of articles published by a student as the number articles published by the student's mentor increases. 
 
 
 ## Appendix: Rate models 
