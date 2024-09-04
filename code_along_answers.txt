@@ -74,7 +74,7 @@ phd.pois3 <- glm(articles ~ gender + mentor + kids + married + prestige,
 2. Create a rootogram of the model
 
 ```{r}
-countreg::rootogram(phd.pois3)
+topmodels::rootogram(phd.pois3)
 ```
 
 
@@ -112,30 +112,31 @@ BIC(phd.nb, phd.zinb)
 3. Compare rootograms for the two models.
 
 ```{r}
-countreg::rootogram(phd.nb)
+topmodels::rootogram(phd.nb)
 ```
 
 ```{r}
-countreg::rootogram(phd.zinb)
+topmodels::rootogram(phd.zinb)
 ```
 
 
 ## CODE ALONG 5
 
 
-
-1.) Does the effect of prestige on the count of articles depend on whether or not the student is married? Model articles as a function of prestige, married, and their interaction. Name the model "phd.nb4"
-
-```{r}
-phd.nb4 <- glm.nb(articles ~ prestige * married, data = d)
-summary(phd.nb4)
-```
-
-2) Create an effect plot to visualize the interaction. Place prestige on the x-axis.
+1. Model articles as a function of mentor, gender, prestige and the interaction of gender and prestige as a negative binomial count model, and look at the summary.
 
 ```{r}
-prestige_eff <- ggpredict(phd.nb4, terms = c("prestige", "married"))
-plot(prestige_eff)
+phd.nb3 <- glm.nb(articles ~ mentor + gender + prestige + 
+                   gender:prestige, data = d)
+summary(phd.nb3)
 ```
+
+2. Create an effect plot to visualize the interaction between prestige and gender.
+
+```{r}
+ggpredict(phd.nb3, terms = c("prestige", "gender")) |> 
+  plot()
+```
+
 
 
