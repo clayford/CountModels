@@ -68,7 +68,7 @@ library(MASS)
 
 ## Distributions for counts
 
-Count data are integers greater than or equal to 0. These are discrete values we might use to record counts of events. Let's review two common probability distributions for count data. 
+Count data are integers greater than or equal to 0. Let's review two common probability distributions for count data. 
 
 ### Poisson distribution
 
@@ -93,7 +93,7 @@ table(y1)
 ```
 
 
-Visualize distribution of counts. The `|>` symbol is the _pipe operator_. It takes the output of a function and passes it to the first argument of the next function.
+Visualize distribution of counts. The `|>` symbol is the _pipe operator_. It takes the output of a function and passes it to the first argument of the next function. To insert pipe operator: Ctrl + Shift + M (Win/Linux) or Shift + Command + M (Mac)
 
 ```{r}
 table(y1) |> plot()
@@ -178,7 +178,7 @@ set.seed(11)
 trt <- sample(0:1, size = 1000, replace = T)
 ```
 
-Now we randomly sample from a Poisson distribution with a mean of `exp(1.2 + 1.8*trt)`. The `exp()` function means exponentiate, or raise e to the power of the argument. Why use `exp()`? That ensures we get a positive value. Lambda has to be positive. Here it's not necessary but as we'll see this transformation is built into count models.
+Now we randomly sample from a Poisson distribution with a mean of `exp(1.2 + 1.8*trt)`. The `exp()` function means exponentiate, or raise e to the power of the argument. Why use `exp()`? That ensures we get a positive value. Lambda has to be positive. Here it's not necessary but as we'll see _this transformation is built into count models_.
 
 ```{r}
 set.seed(22)
@@ -258,7 +258,7 @@ We can extract the coefficients using `coef()`
 coef(m1)
 ```
 
-The coefficients are very close to the "true" values of 1.2 and 1.8.
+The coefficients are very close to the "true" values of 1.2 and 1.8:
 
 Notice the coefficients are on the log scale. We need to use `exp()` to get expected counts. 
 
@@ -278,7 +278,7 @@ exp(1.176377 + 1.814068 * 1) = exp(2.990444) =  about 20
 sum(coef(m1)) |> exp()
 ```
 
-Exponentiating the slope coefficient tells us the _multiplicative effect_ of trt == 1. Expected count of y when trt == 1 is about 6.1 times the expected count when trt == 0.
+Exponentiating the _slope_ coefficient tells us the _multiplicative effect_ of trt == 1. Expected count of y when trt == 1 is about 6.1 times the expected count when trt == 0.
 
 ```{r}
 coef(m1)["trt"] |> exp()
@@ -409,7 +409,7 @@ Null deviance "by hand"
 The null deviance is the sum of squared deviance residuals for _a model with no predictors_, just an intercept: y1 ~ 1
 
 ```{r}
-null_m1 <- glm(y1 ~ 1, family = poisson)
+null_m1 <- glm(y_resp ~ 1, family = poisson)
 sum(residuals(null_m1, type = "deviance")^2)
 
 ```
@@ -509,7 +509,7 @@ Notice the proportional increase/decrease is very similar to the raw coefficient
 
 ### Confidence intervals
 
-Confidence intervals give us a sense of how certain these estimated effects are. Since we exponentiate and get a multiplicative effect, overlapping 1 (instead of 0) indicates an uncertain direction in magnitude.
+Confidence intervals give us a sense of how certain these estimated effects are. Since we exponentiate and get a multiplicative effect, _overlapping 1_ (instead of 0) indicates an uncertain direction in magnitude.
 
 ```{r}
 exp(confint(phd.pois))
@@ -532,12 +532,6 @@ phd.pois <- glm(articles ~ gender + mentor,
                 data = d, family = poisson)
 ```
 
-```{r}
-phd.pois2 <- glm(articles ~ gender + mentor + kids, 
-                data = d, family = poisson)
-```
-
-
 2. Interpret the coefficient for kids
 
 
@@ -557,8 +551,31 @@ The result of the model was an intercept and coefficients for the 3 predictors
 coef(phd.pois2)
 ```
 
+We can use these coefficients to generate data from a poisson distribution and see how it compares to the original data.
 
-One way to visualize model fit for count models is through _rootograms_.
+```{r}
+sim_data <- rpois(n = 915, lambda = exp(0.43673257 + 
+                    -0.24310649*(d$gender == "female") + 
+                    0.02564518*d$mentor + 
+                    -0.14378697*d$kids))
+# compare plots
+op <- par(mfrow = c(1,2))
+table(sim_data) |> plot(xlab = "")
+table(d$articles) |> plot()
+par(op)
+```
+
+An easier way is to use the `simulate()` function:
+
+```{r}
+op <- par(mfrow = c(1,2))
+table(simulate(phd.pois2)[[1]]) |> plot(xlab = "")
+table(d$articles) |> plot()
+par(op)
+
+```
+
+An even better way to visualize model fit for count models is through _rootograms_.
 
 The topmodels package provides the `rootogram()` function to quickly generate "hanging" rootograms to visualize goodness of fit.
 
@@ -575,7 +592,7 @@ Bars that dip way below 0 are _underfit_; bars that hang way above 0 are _overfi
 We can use the `xlim` argument to increase or decrease the count displayed
 
 ```{r}
-topmodels::rootogram(phd.pois, xlim = c(0, 15))
+topmodels::rootogram(phd.pois2, xlim = c(0, 12))
 ```
 
 
@@ -860,18 +877,10 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 1. Model articles as a function of mentor, gender, prestige and the interaction of gender and prestige as a negative binomial count model, and look at the summary.
 
-```{r}
-phd.nb3 <- glm.nb(articles ~ mentor + gender + prestige + 
-                   gender:prestige, data = d)
-summary(phd.nb3)
-```
+
 
 2. Create an effect plot to visualize the interaction between prestige and gender.
 
-```{r}
-ggpredict(phd.nb3, terms = c("prestige", "gender")) |> 
-  plot()
-```
 
 
 
