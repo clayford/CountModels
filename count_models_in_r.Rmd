@@ -42,6 +42,7 @@ Insert a new R code chunk below and type and run the code: `Sys.time()`
 - using effect plots to visualize models with interactions
 
 Appendix Topics (topics cut for time)
+- diagnostic plots
 - modeling non-linear effects
 - rate models
 - hurdle models
@@ -275,7 +276,7 @@ When trt == 1 (sum both coefficients) the expected mean is...
 exp(1.176377 + 1.814068 * 1) = exp(2.990444) =  about 20
 
 ```{r}
-sum(coef(m1)) |> exp()
+coef(m1) |> sum() |> exp()
 ```
 
 Exponentiating the _slope_ coefficient tells us the _multiplicative effect_ of trt == 1. Expected count of y when trt == 1 is about 6.1 times the expected count when trt == 0.
@@ -293,7 +294,7 @@ exp(coef(m1)["(Intercept)"]) * 6.135355
 This is precisely the expected count when trt == 1 that we calculated above.
 
 ```{r}
-sum(coef(m1)) |> exp()
+coef(m1) |> sum() |> exp()
 ```
 
 ### Fitting a Negative binomial count model
@@ -340,7 +341,7 @@ coef(m2)["(Intercept)"] |> exp()
 When trt == 1 (sum both coefficients) the expected mean count is about 20
 
 ```{r}
-sum(coef(m2)) |> exp()
+coef(m2) |> sum() |> exp()
 ```
 
 The multiplicative effect of trt==1 is about 5.9.
@@ -911,6 +912,56 @@ It's also not unheard of to just use linear models for counts. Sometimes they wo
 - Long, J. S. (1997). Regression Models for Categorical and Limited Dependent Variables, Sage.
 
 - Zeileis A, Kleiber C, and Jackman S. (2008). “Regression Models for Count Data in R.” Journal of Statistical Software, 27(8). URL http://www.jstatsoft.org/v27/i08/. 
+
+## Appendix: Diagnostic plots
+
+Diagnostic plots help us assess model fit. Recall an earlier negative binomial model with an interaction.
+
+```{r}
+formula(phd.nb2)
+```
+
+Let's demonstrate some basic model diagnostics using this model.
+
+_Residual plots_ plot residuals versus fitted values or predictors. We hope residuals do not vary systematically with fitted values or predictors. The `residualPlot()` function from the {car} package makes creating these plots easy.
+
+Residuals versus fitted values plot using _standardized_ residuals. Standardized residuals account for dispersion. This plot looks OK, but hints at problems for larger fitted values. The smooth trend line dipping below zero at the far right indicates our model probably shouldn't be trusted for estimating large article counts.
+
+```{r}
+library(car)
+residualPlot(phd.nb2, type = "rstandard")
+```
+
+We can also look at residuals plots for predictors. Again these shouldn't exhibit any trends. Both of these plots look pretty good. 
+
+```{r}
+residualPlot(phd.nb2, "mentor", type = "rstandard")
+```
+
+```{r}
+residualPlot(phd.nb2, "prestige", type = "rstandard")
+```
+
+The {car} package also provides the `influencePlot()` function to investigate _influential values_. Below row 328 has high leverage (hat value) and high influence (Cook's D). 
+
+```{r}
+influencePlot(phd.nb2)
+```
+
+Subject 328 only published one article but had a mentor who published 77 articles in the past 3 years while being in department with very low prestige. 
+
+```{r}
+d[328, c("articles", "mentor", "prestige")]
+```
+
+An influential observation may change the model when it's dropped from the data. Let's see how observation 328 influences the model. We update the original model by dropping row 328 and then compare model coefficients using the `compareCoefs()` function from the {car} package.
+
+```{r}
+phd.nb3 <- update(phd.nb2, subset = -328)
+compareCoefs(phd.nb2, phd.nb3)
+```
+
+All coefficients change somewhat and the interaction gets a little bit bigger, but it doesn't seem like dropping this subject meaningfully changes the conclusions of the model. 
 
 
 
