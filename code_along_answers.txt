@@ -19,14 +19,6 @@ summary(mod2)
 ```
 
 
-2. Simulate data from the model and compare to the original observed data.
-
-```{r}
-sim_mod2 <- simulate(mod2, nsim = 1)
-par(mfrow = c(1,2))
-plot(table(y))
-plot(table(sim_mod2))
-```
 
 ## CODE ALONG 2
 
@@ -78,9 +70,6 @@ topmodels::rootogram(phd.pois3)
 ```
 
 
-```
-
-
 
 ## CODE ALONG 4
 
@@ -93,7 +82,7 @@ plot(table(d$articles))
 
 ```
 
-1. Fit a zero-inflated _negative binomial_ model using all predictors for both models. Call it "phd.zinb". Use `dist = "negbin`
+1. Fit a zero-inflated _negative binomial_ model using all predictors for both models. Call it "phd.zinb". Use `dist = "negbin"`
 
 ```{r}
 phd.zinb <- pscl::zeroinfl(articles ~ ., data = d, dist = "negbin")
